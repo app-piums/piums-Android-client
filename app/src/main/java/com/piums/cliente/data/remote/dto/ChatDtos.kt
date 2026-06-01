@@ -3,17 +3,20 @@ package com.piums.cliente.data.remote.dto
 import com.google.gson.annotations.SerializedName
 
 // Fix crítico: backend usa participant1Id/participant2Id, NO userId/artistId
+// Fix: backend devuelve el nombre del otro participante como "clientName"/"clientAvatar"
+// Fix: backend devuelve preview del último mensaje como "lastMessagePreview"
 data class ConversationDto(
     val id: String,
     @SerializedName("participant1Id") val userId: String,
     @SerializedName("participant2Id") val artistId: String,
     val bookingId: String?,
-    val status: String,
+    val status: String = "ACTIVE",
     val lastMessageAt: String?,
+    @SerializedName("lastMessagePreview") val lastMessageContent: String? = null,
     val unreadCount: Int = 0,
-    val messages: List<ChatMessageDto> = emptyList(),
-    val artistName: String?,
-    val artistAvatar: String?
+    val messages: List<ChatMessageDto>? = null,
+    @SerializedName("clientName") val artistName: String?,
+    @SerializedName("clientAvatar") val artistAvatar: String?
 )
 
 data class ConversationsResponse(

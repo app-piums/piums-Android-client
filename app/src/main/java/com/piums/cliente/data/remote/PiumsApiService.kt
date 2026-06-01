@@ -303,6 +303,16 @@ interface PiumsApiService {
     @GET("api/catalog/services/{serviceId}/day-offers/public")
     suspend fun getDayOffers(@Path("serviceId") serviceId: String): ServiceDayOffersResponse
 
+    // ── Replacement flow ─────────────────────────────────────────────────────────
+    @GET("api/bookings/{id}/replacement")
+    suspend fun getReplacementSearch(@Path("id") id: String): ReplacementSearchDto
+
+    @POST("api/bookings/{id}/replacement/accept")
+    suspend fun acceptReplacement(@Path("id") id: String): retrofit2.Response<Unit>
+
+    @POST("api/bookings/{id}/replacement/decline")
+    suspend fun declineReplacement(@Path("id") id: String): retrofit2.Response<Unit>
+
     // ── Google Calendar ───────────────────────────────────────────────────────
     @GET("api/auth/google-calendar/status")
     suspend fun googleCalendarStatus(): GoogleCalendarStatusResponse

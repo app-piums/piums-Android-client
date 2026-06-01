@@ -48,6 +48,44 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.*
+
+private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val R = 6371.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+private val CITY_COORDS = mapOf(
+    "Guatemala"           to Pair(14.6349, -90.5069),
+    "Ciudad de Guatemala" to Pair(14.6349, -90.5069),
+    "Antigua Guatemala"   to Pair(14.5586, -90.7295),
+    "Antigua"             to Pair(14.5586, -90.7295),
+    "Quetzaltenango"      to Pair(14.8444, -91.5183),
+    "Cobán"               to Pair(15.4736, -90.3789),
+    "Escuintla"           to Pair(14.3057, -90.7861),
+    "Huehuetenango"       to Pair(15.3197, -91.4737),
+    "Chiquimula"          to Pair(14.7981, -89.5433),
+    "Zacapa"              to Pair(14.9717, -89.5344),
+    "Jalapa"              to Pair(14.6339, -89.9881),
+    "Jutiapa"             to Pair(14.2934, -89.8964),
+    "Santa Rosa"          to Pair(14.2800, -90.2750),
+    "Retalhuleu"          to Pair(14.5397, -91.6864),
+    "San Marcos"          to Pair(14.9658, -91.7953),
+    "Totonicapán"         to Pair(14.9108, -91.3606),
+    "Sololá"              to Pair(14.7764, -91.1822),
+    "Chimaltenango"       to Pair(14.6631, -90.8197),
+    "Sacatepéquez"        to Pair(14.5586, -90.7295),
+    "El Progreso"         to Pair(14.9428, -89.8650),
+    "Baja Verapaz"        to Pair(15.1136, -90.1822),
+    "Alta Verapaz"        to Pair(15.4736, -90.3789),
+    "Petén"               to Pair(16.9328, -89.8929),
+    "Flores"              to Pair(16.9328, -89.8929),
+    "Izabal"              to Pair(15.7356, -88.6014),
+)
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
@@ -122,6 +160,8 @@ class BookingViewModel @Inject constructor(
         private set
     var pricingResult by mutableStateOf<PricingCalculateResponse?>(null)
         private set
+    var computedDistanceKm by mutableStateOf<Double?>(null)
+        private set
     var isCalculatingPrice by mutableStateOf(false)
         private set
     var isLocatingGPS by mutableStateOf(false)
@@ -153,6 +193,31 @@ class BookingViewModel @Inject constructor(
     }
 
     init {
+        // Pre-select date if navigated from ArtistSearchByDateScreen
+        val preselectedDate = savedState.get<String>("date")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        if (preselectedDate != null) {
+            selectedDate = preselectedDate
+            currentMonth = YearMonth.from(preselectedDate)
+        }
+
+        // Pre-fill location from ArtistSearchByDateScreen
+        val preselectedLat = savedState.get<String>("lat")
+            ?.toDoubleOrNull()?.takeIf { it != 0.0 }
+        val preselectedLng = savedState.get<String>("lng")
+            ?.toDoubleOrNull()?.takeIf { it != 0.0 }
+        val preselectedLocation = savedState.get<String>("location")
+            ?.let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrNull() }
+            ?.takeIf { it.isNotBlank() }
+        if (preselectedLat != null && preselectedLng != null) {
+            locationLat = preselectedLat
+            locationLng = preselectedLng
+        }
+        if (preselectedLocation != null) {
+            location = preselectedLocation
+        }
+
         loadServicesAndArtist()
         viewModelScope.launch {
             userEvents = runCatching { api.getEvents() }.getOrNull()?.list ?: emptyList()
@@ -169,6 +234,8 @@ class BookingViewModel @Inject constructor(
                     api.getAvailabilityCalendar(artistId, currentMonth.year, currentMonth.monthValue)
                 }.getOrNull()
                 blockedDates = cal?.allBlocked ?: emptySet()
+                // If date was pre-selected from search, load time slots immediately
+                selectedDate?.let { loadSlots(it) }
             } finally {
                 isLoadingServices = false
             }
@@ -256,9 +323,13 @@ class BookingViewModel @Inject constructor(
         if (isCouponApplied) { isCouponApplied = false; couponDiscount = 0; couponError = null }
     }
 
+    fun onCouponCodeChange(v: String) = onCouponChange(v)
+
     fun clearCoupon() {
         couponCode = ""; isCouponApplied = false; couponDiscount = 0; couponError = null
     }
+
+    fun submitCoupon() = validateCoupon()
 
     fun validateCoupon() {
         val svc  = selectedService ?: return
@@ -297,6 +368,8 @@ class BookingViewModel @Inject constructor(
         val date = selectedDate ?: return
         viewModelScope.launch {
             isCalculatingPrice = true
+            val distKm = computeDistanceKm()
+            computedDistanceKm = distKm
             pricingResult = runCatching {
                 api.calculatePricing(PricingCalculateRequest(
                     serviceId     = svc.id,
@@ -304,11 +377,27 @@ class BookingViewModel @Inject constructor(
                     duration      = svc.duration,
                     locationLat   = locationLat,
                     locationLng   = locationLng,
+                    distanceKm    = distKm,
                     numDays       = numDays
                 ))
             }.getOrNull()
             isCalculatingPrice = false
         }
+    }
+
+    private fun computeDistanceKm(): Double? {
+        val cLat = locationLat ?: return null
+        val cLng = locationLng ?: return null
+        val aLat = artist?.baseLocationLat
+        val aLng = artist?.baseLocationLng
+        if (aLat != null && aLng != null) {
+            return haversineKm(cLat, cLng, aLat, aLng)
+        }
+        val cityCoords = artist?.city?.let { CITY_COORDS[it] }
+        if (cityCoords != null) {
+            return haversineKm(cLat, cLng, cityCoords.first, cityCoords.second)
+        }
+        return null
     }
 
     fun openConfirmModal()  { showConfirmModal = true }
@@ -889,7 +978,7 @@ private fun DetailsStep(vm: BookingViewModel) {
     var showMapPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        if (vm.location.isEmpty() && !vm.isLocatingGPS) vm.useMyLocation()
+        if (vm.location.isEmpty() && vm.locationLat == null && !vm.isLocatingGPS) vm.useMyLocation()
     }
 
     Column(
@@ -1124,7 +1213,7 @@ private fun CouponField(vm: BookingViewModel) {
 
 @Composable
 private fun ConfirmStep(vm: BookingViewModel) {
-    val dateFmt = DateTimeFormatter.ofPattern("d 'de' MMMM yyyy", Locale("es", "ES"))
+    val dateFmt = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy", Locale("es", "ES"))
 
     Column(
         modifier = Modifier
@@ -1132,131 +1221,276 @@ private fun ConfirmStep(vm: BookingViewModel) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 8.dp)
             .navigationBarsPadding(),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Summary card
-        Box(
+        // ── Título ──
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "Resumen de Reserva",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Revisa los detalles antes de confirmar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.55f)
+            )
+        }
+
+        // ── Artist card ──
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(20.dp)
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryRow("Artista",  vm.artist?.displayName ?: "—")
-                SummaryRow("Servicio", vm.selectedService?.name ?: "—")
-                SummaryRow("Fecha",    vm.selectedDate?.format(dateFmt) ?: "—")
-                SummaryRow("Hora",     vm.selectedTime ?: "—")
-                if (vm.isMultiDay) SummaryRow("Días", "${vm.numDays} días")
-                if (vm.location.isNotBlank()) SummaryRow("Dirección", vm.location)
-                if (vm.notes.isNotBlank()) SummaryRow("Notas", vm.notes)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(PiumsOrange.copy(0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    (vm.artist?.displayName?.take(2) ?: "?").uppercase(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = PiumsOrange
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    vm.artist?.displayName ?: "—",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    vm.selectedService?.name ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.55f)
+                )
             }
         }
 
-        // Location nudge
+        // ── Detail rows with icons ──
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            vm.selectedDate?.let { date ->
+                ReviewRow(
+                    icon = Icons.Default.CalendarToday,
+                    label = "Fecha",
+                    value = date.format(dateFmt).replaceFirstChar { it.uppercase() }
+                )
+            }
+            vm.selectedTime?.let { time ->
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                ReviewRow(icon = Icons.Default.Schedule, label = "Hora", value = time)
+            }
+            if (vm.isMultiDay) {
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                ReviewRow(icon = Icons.Default.DateRange, label = "Días", value = "${vm.numDays} días")
+            }
+            if (vm.location.isNotBlank()) {
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                ReviewRow(icon = Icons.Default.LocationOn, label = "Lugar", value = vm.location)
+            }
+            if (vm.notes.isNotBlank()) {
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                ReviewRow(icon = Icons.Default.Notes, label = "Notas", value = vm.notes)
+            }
+        }
+
+        // ── Location nudge ──
         if (vm.locationLat == null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(PiumsOrange.copy(0.08f))
+                    .border(1.dp, PiumsOrange.copy(0.25f), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.LocationOn, null, tint = PiumsOrange, modifier = Modifier.size(22.dp))
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Agrega tu ubicación",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold)
+                    Text("Necesaria para calcular el costo de traslado del artista.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                        lineHeight = 15.sp)
+                }
+                if (vm.isLocatingGPS) {
+                    CircularProgressIndicator(color = PiumsOrange, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable { vm.useMyLocation(); vm.calculatePrice() })
+                }
+            }
+        }
+
+        // ── Desglose de Precio ──
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Desglose de Precio",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold)
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(1.dp, PiumsOrange.copy(0.3f), RoundedCornerShape(14.dp))
+                    .background(PiumsOrange.copy(0.07f))
+                    .border(1.dp, PiumsOrange.copy(0.2f), RoundedCornerShape(14.dp))
                     .padding(16.dp)
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.LocationOn, null,
-                            tint = PiumsOrange, modifier = Modifier.size(20.dp))
-                        Column {
-                            Text("Agrega tu ubicación",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface)
-                            Text("Necesaria para calcular el traslado del artista",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
-                                lineHeight = 16.sp)
-                        }
+                if (vm.isCalculatingPrice) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CircularProgressIndicator(color = PiumsOrange,
+                            modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Calculando precio...", color = PiumsOrange,
+                            style = MaterialTheme.typography.bodySmall)
                     }
-                    TextButton(
-                        onClick  = { vm.useMyLocation(); vm.calculatePrice() },
-                        enabled  = !vm.isLocatingGPS
-                    ) {
-                        if (vm.isLocatingGPS) CircularProgressIndicator(color = PiumsOrange,
-                            modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        else Text("Agregar", color = PiumsOrange,
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.labelMedium)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val items = vm.pricingResult?.items
+                        if (!items.isNullOrEmpty()) {
+                            // Item-by-item from backend (excludes DISCOUNT items — shown separately)
+                            items.filter { it.type != "DISCOUNT" }.forEach { item ->
+                                val isTravel = item.type == "TRAVEL"
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        if (isTravel) {
+                                            Icon(Icons.Default.DirectionsCar, null,
+                                                tint = PiumsOrange, modifier = Modifier.size(16.dp))
+                                        }
+                                        Text(item.name,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isTravel) PiumsOrange
+                                                    else MaterialTheme.colorScheme.onSurface.copy(0.7f),
+                                            modifier = Modifier.weight(1f))
+                                    }
+                                    Text(
+                                        "$${String.format("%,.2f", item.totalPriceCents / 100.0)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isTravel) PiumsOrange
+                                                else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        } else {
+                            // Fallback to breakdown summary
+                            val breakdown = vm.pricingResult?.breakdown
+                            breakdown?.baseCents?.let { base ->
+                                PriceRow(vm.selectedService?.name ?: "Servicio",
+                                    "$${String.format("%,.2f", base / 100.0)}")
+                            }
+                            breakdown?.travelCents?.takeIf { it > 0 }?.let { travel ->
+                                val dist = vm.computedDistanceKm
+                                val label = if (dist != null) {
+                                    val included = 10.0
+                                    val extra = maxOf(0.0, dist - included)
+                                    "Desplazamiento (%.1f km adicionales)".format(extra)
+                                } else "Traslado"
+                                Row(Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)) {
+                                        Icon(Icons.Default.DirectionsCar, null,
+                                            tint = PiumsOrange, modifier = Modifier.size(16.dp))
+                                        Text(label, style = MaterialTheme.typography.bodySmall,
+                                            color = PiumsOrange, modifier = Modifier.weight(1f))
+                                    }
+                                    Text("$${String.format("%,.2f", travel / 100.0)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium, color = PiumsOrange)
+                                }
+                            }
+                        }
+
+                        if (vm.isCouponApplied && vm.couponDiscount > 0) {
+                            PriceRow("Descuento cupón",
+                                "-$${String.format("%,.2f", vm.couponDiscount / 100.0)}",
+                                valueColor = PiumsSuccess)
+                        }
+
+                        HorizontalDivider(color = PiumsOrange.copy(0.2f))
+
+                        Row(Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("Total", fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge)
+                            Column(horizontalAlignment = Alignment.End) {
+                                if (vm.isCouponApplied && vm.rawTotal != null) {
+                                    Text("$${String.format("%,.2f", vm.rawTotal!! / 100.0)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
+                                        textDecoration = TextDecoration.LineThrough)
+                                }
+                                Text(vm.formattedFinalTotal,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = if (vm.isCouponApplied) PiumsSuccess else PiumsOrange)
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Pricing breakdown
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(PiumsOrange.copy(0.07f))
-                .border(1.dp, PiumsOrange.copy(0.25f), RoundedCornerShape(16.dp))
-                .padding(20.dp)
-        ) {
-            if (vm.isCalculatingPrice) {
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(color = PiumsOrange,
-                        modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text("Calculando precio...", color = PiumsOrange,
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val breakdown = vm.pricingResult?.breakdown
-                    if (breakdown != null) {
-                        breakdown.baseCents?.let { base ->
-                            PriceRow("Servicio", "$${String.format("%,.2f", base / 100.0)}")
-                        }
-                        breakdown.travelCents?.takeIf { it > 0 }?.let { travel ->
-                            PriceRow("Traslado", "$${String.format("%,.2f", travel / 100.0)}")
-                        }
-                        if (breakdown.baseCents != null || breakdown.travelCents != null) {
-                            HorizontalDivider(color = PiumsOrange.copy(0.2f))
-                        }
-                    }
-                    if (vm.isCouponApplied && vm.couponDiscount > 0) {
-                        PriceRow("Descuento cupón",
-                            "-$${String.format("%,.2f", vm.couponDiscount / 100.0)}",
-                            valueColor = PiumsSuccess)
-                    }
-                    Row(Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text("Total", fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface)
-                        Column(horizontalAlignment = Alignment.End) {
-                            if (vm.isCouponApplied && vm.rawTotal != null) {
-                                Text("$${String.format("%,.2f", vm.rawTotal!! / 100.0)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-                                    textDecoration = TextDecoration.LineThrough)
-                            }
-                            Text(vm.formattedFinalTotal, fontWeight = FontWeight.ExtraBold,
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = if (vm.isCouponApplied) PiumsSuccess else PiumsOrange)
-                        }
-                    }
-                }
+        // ── Viáticos info banner ──
+        val hasTravel = vm.pricingResult?.items?.any { it.type == "TRAVEL" } == true ||
+            (vm.pricingResult?.breakdown?.travelCents ?: 0) > 0
+        if (hasTravel) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(Icons.Default.Info, null,
+                    tint = PiumsOrange, modifier = Modifier.size(18.dp))
+                Text(
+                    "Los viáticos cubren transporte, alimentación y hospedaje del artista.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
+                    lineHeight = 16.sp
+                )
             }
         }
+
+        // ── Coupon section ──
+        CouponSection(vm = vm)
 
         vm.bookingError?.let {
             Text(it, color = MaterialTheme.colorScheme.error,
@@ -1264,7 +1498,7 @@ private fun ConfirmStep(vm: BookingViewModel) {
                 modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         }
 
-        // Confirm button
+        // ── Confirm button ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1300,6 +1534,142 @@ private fun ConfirmStep(vm: BookingViewModel) {
 }
 
 @Composable
+private fun ReviewRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = PiumsOrange, modifier = Modifier.size(20.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+            modifier = Modifier.width(60.dp))
+        Spacer(Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(2f))
+    }
+}
+
+@Composable
+private fun CouponSection(vm: BookingViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("¿Tienes un cupón?",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold)
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.LocalOffer, null, tint = PiumsOrange, modifier = Modifier.size(16.dp))
+                androidx.compose.foundation.text.BasicTextField(
+                    value = vm.couponCode,
+                    onValueChange = vm::onCouponCodeChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    decorationBox = { inner ->
+                        if (vm.couponCode.isEmpty()) {
+                            Text("Código de cupón",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
+                        }
+                        inner()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (vm.isCouponApplied) {
+                IconButton(onClick = vm::clearCoupon, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Cancel, null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (vm.couponCode.isBlank()) MaterialTheme.colorScheme.outline.copy(0.2f)
+                            else PiumsOrange
+                        )
+                        .clickable(enabled = vm.couponCode.isNotBlank() && !vm.isValidatingCoupon,
+                            onClick = vm::submitCoupon)
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (vm.isValidatingCoupon) {
+                        CircularProgressIndicator(color = Color.White,
+                            modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Aplicar", color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        if (vm.isCouponApplied && vm.couponDiscount > 0) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(PiumsSuccess.copy(0.08f))
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.CheckCircle, null, tint = PiumsSuccess, modifier = Modifier.size(16.dp))
+                Text("Cupón aplicado",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PiumsSuccess,
+                    modifier = Modifier.weight(1f))
+                Text("-$${String.format("%,.2f", vm.couponDiscount / 100.0)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = PiumsSuccess)
+            }
+        }
+
+        vm.couponError?.let { err ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Error, null,
+                    tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
+                Text(err, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
 private fun PriceRow(label: String, value: String, valueColor: Color = MaterialTheme.colorScheme.onSurface) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall,
@@ -1312,83 +1682,186 @@ private fun PriceRow(label: String, value: String, valueColor: Color = MaterialT
 // ─── Confirmation Modal ───────────────────────────────────────────────────────
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun ConfirmModal(vm: BookingViewModel) {
-    val dateFmt = DateTimeFormatter.ofPattern("d 'de' MMMM yyyy", Locale("es", "ES"))
-    AlertDialog(
+    val dateFmt = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", Locale("es", "ES"))
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = vm::closeConfirmModal,
+        sheetState       = sheetState,
         containerColor   = MaterialTheme.colorScheme.surface,
-        title = {
-            Text("¿Confirmar reserva?", fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium)
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Artist chip
-                Row(
+        dragHandle       = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Handle bar
+            Box(
+                Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),
+                Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(width = 36.dp, height = 4.dp)
+                        .background(MaterialTheme.colorScheme.outline.copy(0.3f), RoundedCornerShape(2.dp))
+                )
+            }
+
+            // Title + orange underline
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Confirmar Reserva",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Box(
+                    Modifier.width(40.dp).height(3.dp)
+                        .background(PiumsOrange, RoundedCornerShape(2.dp))
+                )
+            }
+
+            // Artist card
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(PiumsOrange.copy(0.06f))
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(PiumsOrange.copy(0.08f))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(PiumsOrange.copy(0.15f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier.size(36.dp).clip(CircleShape)
-                            .background(PiumsOrange.copy(0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(vm.artist?.displayName?.firstOrNull()?.uppercase() ?: "?",
-                            fontWeight = FontWeight.Bold, color = PiumsOrange)
-                    }
-                    Column {
-                        Text(vm.artist?.displayName ?: "—", fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface)
-                        Text(vm.selectedService?.name ?: "—",
-                            style = MaterialTheme.typography.labelSmall,
+                    Text(
+                        (vm.artist?.displayName?.take(2) ?: "?").uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = PiumsOrange
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "ARTISTA",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        vm.artist?.displayName ?: "—",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    vm.artist?.specialties?.firstOrNull()?.let {
+                        Text(it.uppercase(), style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                     }
                 }
-                SummaryRow("Fecha", vm.selectedDate?.format(dateFmt) ?: "—")
-                SummaryRow("Hora",  vm.selectedTime ?: "—")
-                if (vm.isMultiDay) SummaryRow("Días", "${vm.numDays} días")
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.15f))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Total", fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface)
-                    Text(vm.formattedFinalTotal, fontWeight = FontWeight.ExtraBold,
-                        color = PiumsOrange, style = MaterialTheme.typography.bodyMedium)
-                }
-                Text(
-                    "Al confirmar se enviará la solicitud al artista. Aún puede cancelar antes de que la acepte.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f),
-                    lineHeight = 16.sp
-                )
             }
-        },
-        confirmButton = {
+
+            // Detail rows
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(0.5f))
+            ) {
+                ConfirmRow("sparkles", "Servicio", vm.selectedService?.name ?: "—")
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                ConfirmRow("calendar_today", "Fecha",
+                    vm.selectedDate?.format(dateFmt)?.replaceFirstChar { it.uppercase() } ?: "—")
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                ConfirmRow("schedule", "Hora", vm.selectedTime ?: "—")
+                if (vm.isMultiDay) {
+                    HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                    ConfirmRow("event_repeat", "Días", "${vm.numDays} días")
+                }
+                HorizontalDivider(Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                // Total row — highlighted
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Total", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text(vm.formattedFinalTotal, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold, color = PiumsOrange)
+                }
+            }
+
+            // Legal text
+            Text(
+                "Al confirmar, aceptas nuestras políticas de cancelación y términos de servicio. La solicitud será enviada al artista.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+                textAlign = TextAlign.Center,
+                lineHeight = 16.sp,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Confirm button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Brush.linearGradient(listOf(PiumsOrange, Color(0xFFFF8438))))
-                    .clickable(onClick = vm::confirmBooking),
+                    .clickable(enabled = !vm.isBooking, onClick = vm::confirmBooking),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Sí, confirmar", color = Color.White, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium)
+                if (vm.isBooking) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Sí, confirmar", color = Color.White, fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge)
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = vm::closeConfirmModal) {
-                Text("Cancelar", color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+
+            // Cancel link
+            TextButton(
+                onClick = vm::closeConfirmModal,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cancelar", color = PiumsOrange, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold)
             }
         }
-    )
+    }
+}
+
+@Composable
+private fun ConfirmRow(icon: String, label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            when (icon) {
+                "sparkles" -> Icons.Default.AutoAwesome
+                "calendar_today" -> Icons.Default.CalendarToday
+                "schedule" -> Icons.Default.Schedule
+                "event_repeat" -> Icons.Default.EventRepeat
+                else -> Icons.Default.Info
+            },
+            contentDescription = null,
+            tint = PiumsOrange,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(label, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+            modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 // ─── Shared composables ───────────────────────────────────────────────────────

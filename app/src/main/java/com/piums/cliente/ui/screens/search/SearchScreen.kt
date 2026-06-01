@@ -198,8 +198,11 @@ class SearchViewModel @Inject constructor(
                         sortBy = filters.sortBy, sortOrder = filters.sortOrder
                     )
                 }
-                artists = if (reset) response.list.filter { it.servicesCount > 0 }
-                          else artists + response.list.filter { it.servicesCount > 0 }
+                val withServices = { a: com.piums.cliente.data.remote.dto.ArtistDto ->
+                    a.servicesCount > 0 || a.serviceIds?.isNotEmpty() == true || a.serviceTitles?.isNotEmpty() == true
+                }
+                artists = if (reset) response.list.filter(withServices)
+                          else artists + response.list.filter(withServices)
                 hasMore = response.pagination?.hasMore == true
                 hasSearched = true
             } catch (_: Exception) {

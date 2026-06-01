@@ -116,7 +116,7 @@ class InboxViewModel @Inject constructor(
                 conversations = (runCatching { api.getConversations(limit = 50) }
                     .onFailure { Log.e("PiumsAPI", "getConversations error", it) }
                     .getOrNull()?.list ?: emptyList())
-                    .filter { it.status.uppercase() !in setOf("CLOSED", "CANCELLED") }
+                    .filter { (it.status ?: "").uppercase() !in setOf("CLOSED", "CANCELLED") }
                 disputes = runCatching { api.getDisputes() }
                     .onFailure { Log.e("PiumsAPI", "getDisputes error", it) }
                     .getOrNull()?.all ?: emptyList()
@@ -331,16 +331,17 @@ private fun ConversationsTab(
 
 @Composable
 private fun ConversationItem(conv: ConversationDto, onClick: () -> Unit) {
-    val statusColor = when (conv.status.uppercase()) {
+    val safeStatus = (conv.status ?: "").uppercase()
+    val statusColor = when (safeStatus) {
         "ACTIVE"  -> PiumsOrange
         "PENDING" -> Color(0xFF3B82F6)
         else      -> MaterialTheme.colorScheme.onSurface.copy(0.4f)
     }
-    val statusLabel = when (conv.status.uppercase()) {
+    val statusLabel = when (safeStatus) {
         "ACTIVE"  -> "Activo"
         "PENDING" -> "Pendiente"
         "CLOSED"  -> "Cerrado"
-        else      -> conv.status.lowercase().replaceFirstChar { it.uppercase() }
+        else      -> safeStatus.lowercase().replaceFirstChar { it.uppercase() }
     }
 
     Row(
@@ -388,7 +389,7 @@ private fun ConversationItem(conv: ConversationDto, onClick: () -> Unit) {
                 }
             }
 
-            val lastMsg = conv.messages.lastOrNull()?.content
+            val lastMsg = conv.lastMessageContent ?: conv.messages?.lastOrNull()?.content
             if (lastMsg != null) {
                 Text(lastMsg, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(0.5f),

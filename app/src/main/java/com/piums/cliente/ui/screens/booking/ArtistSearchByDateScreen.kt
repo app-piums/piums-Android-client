@@ -139,7 +139,10 @@ class ArtistSearchByDateViewModel @Inject constructor(
     val displayed: List<ArtistWithAvailability>
         get() {
             var result = artists.filter { item ->
-                if (item.artist.servicesCount == 0) return@filter false
+                val hasServices = item.artist.servicesCount > 0
+                    || item.artist.serviceIds?.isNotEmpty() == true
+                    || item.artist.serviceTitles?.isNotEmpty() == true
+                if (!hasServices) return@filter false
                 if (showOnlyAvailable && !item.available) return@filter false
                 if (selectedSpecialty != null) {
                     val specs = item.artist.specialties?.joinToString(" ")?.lowercase() ?: ""
@@ -267,10 +270,11 @@ class ArtistSearchByDateViewModel @Inject constructor(
 @Composable
 fun ArtistSearchByDateScreen(
     onBack: () -> Unit,
-    onArtistClick: (artistId: String, date: String) -> Unit,
+    onArtistClick: (artistId: String, date: String, lat: Double?, lng: Double?, locationLabel: String) -> Unit,
     initialDate: LocalDate? = null,
     initialLat: Double? = null,
     initialLng: Double? = null,
+    initialLocation: String? = null,
     vm: ArtistSearchByDateViewModel = hiltViewModel()
 ) {
     val today = remember { LocalDate.now() }
@@ -281,7 +285,7 @@ fun ArtistSearchByDateScreen(
     // Pre-set location from picker
     LaunchedEffect(Unit) {
         if (initialLat != null && initialLng != null) {
-            vm.setLocation(initialLat, initialLng)
+            vm.setLocation(initialLat, initialLng, initialLocation ?: "Ubicación del evento")
         }
     }
 
@@ -544,7 +548,10 @@ fun ArtistSearchByDateScreen(
                                 onClick = {
                                     onArtistClick(
                                         item.artist.resolvedId,
-                                        selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                        selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                                        vm.userLat,
+                                        vm.userLng,
+                                        vm.locationLabel
                                     )
                                 }
                             )
@@ -990,7 +997,7 @@ private fun ArtistAvailabilityCard(
                 }
                 item.mainServicePrice?.takeIf { it > 0 }?.let { price ->
                     Text(
-                        "Q${String.format("%,.2f", price / 100.0)}",
+                        "$${String.format("%,.2f", price.toDouble())}",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold, color = PiumsOrange
                     )

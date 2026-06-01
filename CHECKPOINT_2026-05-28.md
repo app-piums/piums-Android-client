@@ -47,5 +47,23 @@
 
 ---
 
+### 4. Feat: ServiceDetailSheet en ArtistProfileScreen ✅
+- Botones "Ver detalles" + "Reservar" lado a lado en cada ServiceCard (antes solo "Reservar")
+- `ServiceDetailSheet` (ModalBottomSheet) muestra: nombre, descripción, precio, duración, tipo de precio, lista "Qué incluye" con checkmarks, botón Reservar
+- El campo `whatIsIncluded: List<String>` ya existía en `ArtistServiceDto` pero nunca se mostraba
+- Paridad con iOS: `ArtistProfileView.swift` líneas 665–800
+
+### 5. Feat: "Escribir reseña" en ArtistProfileScreen ✅
+- Header de sección "Reseñas" ahora incluye botón "Escribir reseña" (antes solo título)
+- Sección Reseñas siempre visible (aunque no haya reseñas) para que el botón sea accesible
+- `WriteReviewSheet` (ModalBottomSheet): carga reservas COMPLETED con ese artista, muestra picker si hay >1, estrellas interactivas, campo comentario, submit con loading/error/success states
+- Si no hay reservas completadas: mensaje explicativo en lugar del formulario
+- Paridad con iOS: `ArtistProfileView.swift` líneas 492–640
+
+### 6. Fix: Google Calendar — refresca al volver del navegador ✅
+- `ProfileScreen` agrega `ON_RESUME` observer via `LifecycleEventObserver`
+- Cuando el usuario regresa del navegador tras autorizar, `loadCalendarStatus()` se ejecuta automáticamente
+- Paridad con iOS: `.onAppear` en `ProfileView.swift` líneas 203, 208
+
 ## Pendientes conocidos
 - **Certificate pinning**: reemplazar `"sha256/REEMPLAZAR_CON_PIN_REAL_DEL_LEAF_CERT="` en `NetworkModule.kt`

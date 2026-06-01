@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+layout.buildDirectory.set(File("/Users/piums/gradle-builds/PiumsClienteAndroid/app"))
+
 android {
     namespace = "com.piums.cliente"
     compileSdk = 35

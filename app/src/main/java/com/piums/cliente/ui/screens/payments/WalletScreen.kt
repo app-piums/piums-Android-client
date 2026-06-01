@@ -94,6 +94,11 @@ fun WalletScreen(
     vm: WalletViewModel = hiltViewModel()
 ) {
     var confirmDelete by remember { mutableStateOf<PaymentMethodDto?>(null) }
+    var showAddCard   by remember { mutableStateOf(false) }
+
+    if (showAddCard) {
+        HowToAddCardSheet(onDismiss = { showAddCard = false })
+    }
 
     confirmDelete?.let { toDelete ->
         AlertDialog(
@@ -128,6 +133,10 @@ fun WalletScreen(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = { showAddCard = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Agregar tarjeta",
+                    tint = PiumsOrange)
+            }
         }
 
         when {
@@ -430,4 +439,117 @@ private fun brandTint(brand: String?): Color = when (brand?.lowercase()) {
     "mastercard" -> Color(0xFFEB001B)
     "amex"       -> Color(0xFF006FCF)
     else         -> Color(0xFF6B7280)
+}
+
+// ─── How To Add Card Sheet ────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HowToAddCardSheet(onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState       = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(PiumsOrange.copy(0.10f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.CreditCard, null,
+                    tint     = PiumsOrange,
+                    modifier = Modifier.size(40.dp))
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("¿Cómo pagar con tarjeta?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+                Text("Paga de forma segura a través de Tilopay con tu tarjeta Visa o Mastercard.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                listOf(
+                    Triple(Icons.Default.CalendarToday, "Reserva un servicio",
+                        "Encuentra un artista y crea tu reserva."),
+                    Triple(Icons.Default.Lock, "Paga con Tilopay",
+                        "Ingresa los datos de tu tarjeta Visa o Mastercard en el formulario seguro de Tilopay."),
+                    Triple(Icons.Default.CheckCircle, "Pago confirmado",
+                        "Recibirás confirmación de tu reserva una vez procesado el pago.")
+                ).forEachIndexed { idx, (icon, title, subtitle) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(PiumsOrange.copy(0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(icon, null, tint = PiumsOrange, modifier = Modifier.size(18.dp))
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(title,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold)
+                            Text(subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                        }
+                    }
+                    if (idx < 2) HorizontalDivider(
+                        modifier = Modifier.padding(start = 66.dp),
+                        color    = MaterialTheme.colorScheme.outline.copy(0.08f)
+                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Lock, null,
+                    tint     = Color(0xFF22C55E),
+                    modifier = Modifier.size(14.dp))
+                Text("Solo se aceptan Visa y Mastercard a través de Tilopay",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+            }
+
+            Button(
+                onClick  = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                shape    = RoundedCornerShape(14.dp),
+                colors   = ButtonDefaults.buttonColors(containerColor = PiumsOrange)
+            ) {
+                Text("Entendido", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
 }

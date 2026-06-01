@@ -28,6 +28,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,6 +38,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.piums.cliente.R
 import com.piums.cliente.ui.theme.PiumsError
 import com.piums.cliente.ui.theme.PiumsOrange
+import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 
 // ─── Auth container ───────────────────────────────────────────────────────────
 
@@ -80,40 +86,71 @@ fun AuthScreen(
 @Composable
 private fun AuthBackground(content: @Composable BoxScope.() -> Unit) {
     var animateIn by remember { mutableStateOf(false) }
-    val infiniteTransition = rememberInfiniteTransition(label = "glow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.12f, targetValue = 0.22f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(3200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "glowAlpha"
-    )
+    var time      by remember { mutableStateOf(0f) }
 
-    LaunchedEffect(Unit) { animateIn = true }
+    LaunchedEffect(Unit) {
+        animateIn = true
+        val start = System.currentTimeMillis()
+        while (true) {
+            delay(16)
+            time = (System.currentTimeMillis() - start) / 1000f
+        }
+    }
+
+    // Animated blob positions — mirrors iOS sin/cos offsets
+    val b1x = (sin(time * 0.5f) * 70).dp
+    val b1y = (cos(time * 0.4f) * 60 - 60).dp
+    val b2x = (cos(time * 0.6f + 1f) * 65).dp
+    val b2y = (sin(time * 0.5f + 0.5f) * 70 + 130).dp
+    val b3x = (sin(time * 0.7f + 2f) * 60).dp
+    val b3y = (cos(time * 0.45f + 1f) * 65 + 280).dp
+    val b4x = (cos(time * 0.4f + 0.7f) * 72).dp
+    val b4y = (sin(time * 0.65f + 1.5f) * 75 + 420).dp
+
+    val logoAlpha by animateFloatAsState(if (animateIn) 1f else 0f, tween(400), label = "logo")
+    val logoScale by animateFloatAsState(
+        if (animateIn) 1f else 0.7f,
+        spring(dampingRatio = 0.72f, stiffness = 220f), label = "logoScale"
+    )
+    val textAlpha by animateFloatAsState(if (animateIn) 1f else 0f, tween(450, delayMillis = 150), label = "text")
+    val sheetOffset by animateDpAsState(
+        targetValue   = if (animateIn) 0.dp else 600.dp,
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 190f),
+        label         = "sheet"
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0D0907))
     ) {
-        // Single large glow circle at top — matching iOS
-        Box(
-            Modifier
-                .size(340.dp)
-                .align(Alignment.TopCenter)
-                .offset(y = 60.dp)
-                .blur(60.dp)
-                .background(PiumsOrange.copy(alpha = glowAlpha), CircleShape)
-        )
+        // 4 animated orange blobs via radial gradient Canvas (works with software rendering)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2f
+            data class Blob(val r: Float, val alpha: Float, val ox: Float, val oy: Float)
+            listOf(
+                Blob(300.dp.toPx(), 0.38f, b1x.toPx(), b1y.toPx()),
+                Blob(260.dp.toPx(), 0.32f, b2x.toPx(), b2y.toPx()),
+                Blob(280.dp.toPx(), 0.30f, b3x.toPx(), b3y.toPx()),
+                Blob(220.dp.toPx(), 0.26f, b4x.toPx(), b4y.toPx()),
+            ).forEach { blob ->
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(1f, 0.27f, 0.03f, blob.alpha),
+                            Color(1f, 0.27f, 0.03f, blob.alpha * 0.5f),
+                            Color.Transparent
+                        ),
+                        center = Offset(cx + blob.ox, blob.oy),
+                        radius = blob.r
+                    ),
+                    radius = blob.r,
+                    center = Offset(cx + blob.ox, blob.oy)
+                )
+            }
+        }
 
-        // Logo area
-        val logoAlpha  by animateFloatAsState(if (animateIn) 1f else 0f, tween(400), label = "logo")
-        val logoScale  by animateFloatAsState(
-            if (animateIn) 1f else 0.7f,
-            spring(dampingRatio = 0.72f, stiffness = 220f), label = "logoScale"
-        )
-        val textAlpha  by animateFloatAsState(if (animateIn) 1f else 0f, tween(450, delayMillis = 150), label = "text")
-
+        // Logo + headline
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,10 +159,10 @@ private fun AuthBackground(content: @Composable BoxScope.() -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Image(
-                painter = painterResource(R.drawable.piums_logo),
+                painter           = painterResource(R.drawable.piums_logo),
                 contentDescription = "Piums",
-                modifier = Modifier
-                    .height(56.dp)
+                modifier          = Modifier
+                    .height(130.dp)
                     .scale(logoScale)
                     .alpha(logoAlpha)
             )
@@ -133,34 +170,30 @@ private fun AuthBackground(content: @Composable BoxScope.() -> Unit) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.alpha(textAlpha)
+                modifier            = Modifier.alpha(textAlpha)
             ) {
                 Text(
                     "¡Bienvenido a Piums!",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
+                    style      = MaterialTheme.typography.headlineMedium,
+                    color      = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     "El artista perfecto para tu próximo evento",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.5f),
+                    style     = MaterialTheme.typography.bodyMedium,
+                    color     = Color.White.copy(alpha = 0.5f),
                     textAlign = TextAlign.Center
                 )
             }
         }
 
-        // Sliding card from bottom
-        val sheetOffset by animateDpAsState(
-            targetValue   = if (animateIn) 0.dp else 600.dp,
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 190f),
-            label         = "sheet"
-        )
+        // Card sliding from bottom
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
             Box(modifier = Modifier.offset(y = sheetOffset)) { content() }
         }
     }
 }
+
 
 // ─── Login Sheet (multi-step) ─────────────────────────────────────────────────
 
@@ -244,7 +277,7 @@ private fun EmailPanel(
             "Ingresar o crear cuenta",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = Color.White
         )
 
         PiumsAuthField(
@@ -307,7 +340,7 @@ private fun PasswordPanel(
                 Text(
                     "Bienvenido",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f)
+                    color = Color.White.copy(0.5f)
                 )
                 Text(
                     email,
@@ -409,23 +442,31 @@ private fun SocialPanel(
 
 @Composable
 private fun AuthCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape    = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        color    = MaterialTheme.colorScheme.surface,
-        border   = BorderStroke(
-            width  = 1.dp,
-            brush  = Brush.verticalGradient(
-                listOf(PiumsOrange.copy(0.30f), Color.Transparent), endY = 200f
+    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF2A1810).copy(0.75f), Color(0xFF120A07).copy(0.92f))
+                )
             )
-        )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(Color.White.copy(0.18f), Color.White.copy(0.04f)),
+                    endY = 200f
+                ),
+                shape = shape
+            )
     ) {
         Column {
             // Drag handle
             Box(Modifier.fillMaxWidth().padding(top = 14.dp), Alignment.Center) {
                 Box(
                     Modifier.size(width = 36.dp, height = 4.dp)
-                        .background(Color.White.copy(0.18f), RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(0.22f), RoundedCornerShape(2.dp))
                 )
             }
             Column(
@@ -599,7 +640,7 @@ private fun RegisterLink(onRegister: () -> Unit) {
         Text(
             "¿No tienes cuenta? ",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.5f)
+            color = Color.White.copy(0.5f)
         )
         Text(
             "Regístrate",
@@ -636,7 +677,7 @@ private fun RegisterSheet(
                 Text("Crear cuenta", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("Únete a la comunidad Piums.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                    color = Color.White.copy(0.5f))
             }
         }
 
@@ -669,7 +710,7 @@ private fun RegisterSheet(
                 ))
             Text("Acepto los Términos y condiciones y la Política de privacidad de Piums.",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                color = Color.White.copy(0.6f))
         }
 
         if (state.error != null) ErrorBanner(state.error)
@@ -684,7 +725,7 @@ private fun RegisterSheet(
         Row(Modifier.fillMaxWidth(), Arrangement.Center) {
             Text("¿Ya tienes cuenta? ",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                color = Color.White.copy(0.5f))
             Text("Inicia sesión", style = MaterialTheme.typography.bodySmall,
                 color = PiumsOrange, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { onBack() })
@@ -709,7 +750,7 @@ private fun ForgotSheet(
                 Text("Recuperar contraseña", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("Te enviaremos un enlace a tu correo.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                    color = Color.White.copy(0.5f))
             }
         }
 
@@ -754,15 +795,22 @@ fun PiumsAuthField(
         animationSpec = tween(200), label = "border"
     )
 
+    val fieldBg         = Color(0xFF3A2419)
+    val unfocusedBorder = Color.White.copy(alpha = 0.16f)
+
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+            color = Color.White.copy(0.5f))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(13.dp))
-                .border(1.5.dp, borderColor, RoundedCornerShape(13.dp))
+                .background(fieldBg, RoundedCornerShape(13.dp))
+                .border(
+                    1.5.dp,
+                    if (borderColor == Color.Transparent) unfocusedBorder else borderColor,
+                    RoundedCornerShape(13.dp)
+                )
                 .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -773,12 +821,11 @@ fun PiumsAuthField(
                 visualTransformation = visual,
                 keyboardOptions = keyboardOptions,
                 keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
                 decorationBox = { inner ->
                     if (value.isEmpty()) Text(placeholder,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(0.35f))
+                        color = Color.White.copy(0.35f))
                     inner()
                 }
             )
@@ -787,8 +834,7 @@ fun PiumsAuthField(
                     Icon(
                         if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = null,
-                        tint = if (isFocused) PiumsOrange.copy(0.8f)
-                               else MaterialTheme.colorScheme.onSurface.copy(0.4f)
+                        tint = if (isFocused) PiumsOrange.copy(0.8f) else Color.White.copy(0.4f)
                     )
                 }
             }

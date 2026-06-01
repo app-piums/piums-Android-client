@@ -118,13 +118,13 @@ class HomeViewModel @Inject constructor(
                     .filter { (it.scheduledDate?.take(10) ?: "") >= today }
                     .minByOrNull { it.scheduledDate ?: "" }
 
-                recommendedArtists = (artistsDeferred.await()?.list ?: emptyList()).filter { it.servicesCount > 0 }
+                recommendedArtists = (artistsDeferred.await()?.list ?: emptyList()).filter { it.servicesCount > 0 || it.serviceIds?.isNotEmpty() == true || it.serviceTitles?.isNotEmpty() == true }
             } catch (e: Exception) {
                 Log.e("PiumsAPI", "HomeViewModel refresh processing error", e)
                 error = "No se pudo cargar la información"
                 // Still assign artists even if bookings processing failed
                 if (recommendedArtists.isEmpty()) {
-                    recommendedArtists = (artistsDeferred.await()?.list ?: emptyList()).filter { it.servicesCount > 0 }
+                    recommendedArtists = (artistsDeferred.await()?.list ?: emptyList()).filter { it.servicesCount > 0 || it.serviceIds?.isNotEmpty() == true || it.serviceTitles?.isNotEmpty() == true }
                 }
             } finally {
                 isLoading = false
@@ -142,7 +142,7 @@ fun HomeScreen(
     onArtistClick: (String) -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
-    onSearchByDate: (date: String, lat: Float, lng: Float) -> Unit = { _, _, _ -> },
+    onSearchByDate: (date: String, lat: Float, lng: Float, location: String) -> Unit = { _, _, _, _ -> },
     vm: HomeViewModel = hiltViewModel()
 ) {
     val today = remember { LocalDate.now() }
@@ -272,12 +272,13 @@ fun HomeScreen(
         EventLocationPickerSheet(
             selectedDate = pickedDate!!,
             onDismiss    = { showLocationPicker = false },
-            onConfirm    = { _, lat, lng ->
+            onConfirm    = { locationName, lat, lng ->
                 showLocationPicker = false
                 onSearchByDate(
                     pickedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE),
                     lat.toFloat(),
-                    lng.toFloat()
+                    lng.toFloat(),
+                    locationName
                 )
             }
         )
@@ -583,7 +584,7 @@ private fun PromoBanner(onClick: () -> Unit) {
             .padding(horizontal = 20.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(PiumsOrange)
-            .height(160.dp)
+            .heightIn(min = 180.dp)
     ) {
         // Círculos decorativos
         Box(

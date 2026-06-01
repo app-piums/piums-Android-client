@@ -26,7 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.piums.cliente.data.local.TokenStorage
@@ -211,11 +214,30 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    var identityStatus by mutableStateOf(tokenStorage.identityVerificationStatus)
+        private set
+
     // ── Google Calendar ───────────────────────────────────────────────────────
     private val _calendarState = MutableStateFlow(GoogleCalendarStatusResponse(connected = false))
     val calendarState: StateFlow<GoogleCalendarStatusResponse> = _calendarState.asStateFlow()
 
-    init { loadCalendarStatus() }
+    init {
+        loadCalendarStatus()
+        syncIdentityStatus()
+    }
+
+    private fun syncIdentityStatus() {
+        viewModelScope.launch {
+            val me = runCatching { api.getMe() }.getOrNull() ?: return@launch
+            val status = when {
+                me.resolvedIsVerified               -> "approved"
+                me.resolvedDocumentFrontUrl != null -> "pending"
+                else                                -> "not_submitted"
+            }
+            tokenStorage.identityVerificationStatus = status
+            identityStatus = status
+        }
+    }
 
     fun loadCalendarStatus() {
         viewModelScope.launch {
@@ -254,6 +276,7 @@ fun ProfileScreen(
 ) {
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showEditProfile by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val calendarState by vm.calendarState.collectAsState()
     val avatarLauncher = rememberLauncherForActivityResult(
@@ -264,18 +287,26 @@ fun ProfileScreen(
     val biometricHelper = remember { BiometricHelper(activity) }
     val biometricAvailable = remember { biometricHelper.canAuthenticate() || vm.biometricEnabled }
 
+    // Refresca el estado del calendario al volver del navegador (después de conectar)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) vm.loadCalendarStatus()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        // Header
+        // ── Header ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(listOf(PiumsOrange.copy(0.20f), Color.Transparent))
-                )
+                .background(Brush.verticalGradient(listOf(PiumsOrange.copy(0.20f), Color.Transparent)))
         ) {
             Column(
                 modifier = Modifier
@@ -283,7 +314,7 @@ fun ProfileScreen(
                     .statusBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -299,16 +330,11 @@ fun ProfileScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (vm.avatarUrl != null) {
-                        AsyncImage(
-                            model = vm.avatarUrl,
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape)
-                        )
+                        AsyncImage(model = vm.avatarUrl, contentDescription = "Avatar",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape))
                     } else {
-                        Text(
-                            vm.userName.firstOrNull()?.uppercase() ?: "P",
-                            fontSize = 32.sp, fontWeight = FontWeight.Bold, color = PiumsOrange
-                        )
+                        Text(vm.userName.firstOrNull()?.uppercase() ?: "P",
+                            fontSize = 32.sp, fontWeight = FontWeight.Bold, color = PiumsOrange)
                     }
                     if (vm.isUploadingAvatar) {
                         Box(Modifier.fillMaxSize().background(Color.Black.copy(0.4f), CircleShape),
@@ -317,105 +343,106 @@ fun ProfileScreen(
                                 modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         }
                     }
-                    // Camera overlay hint
                     Box(
                         modifier = Modifier.align(Alignment.BottomEnd)
-                            .size(22.dp).clip(CircleShape)
-                            .background(PiumsOrange),
+                            .size(22.dp).clip(CircleShape).background(PiumsOrange),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.CameraAlt, null,
                             tint = Color.White, modifier = Modifier.size(13.dp))
                     }
                 }
-                if (vm.isEditingName) {
-                    OutlinedTextField(
-                        value = vm.nameInput,
-                        onValueChange = vm::onNameInputChange,
-                        singleLine = true,
-                        label = { Text("Nombre") },
-                        modifier = Modifier.fillMaxWidth(.7f),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PiumsOrange,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
-                        )
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = vm::cancelEditName) { Text("Cancelar") }
-                        TextButton(
-                            onClick = vm::saveName,
-                            enabled = vm.nameInput.isNotBlank() && !vm.isSavingName
-                        ) {
-                            if (vm.isSavingName) CircularProgressIndicator(
-                                color = PiumsOrange, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            else Text("Guardar", color = PiumsOrange)
-                        }
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(vm.userName.ifBlank { "Usuario" },
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onBackground)
-                        IconButton(onClick = vm::startEditName, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Edit, null,
-                                tint = PiumsOrange, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                }
+
+                Text(vm.userName.ifBlank { "Usuario" },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground)
+
                 Text(vm.userEmail, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(0.5f))
+
+                // Badge "Cliente"
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = PiumsOrange.copy(0.12f)
+                ) {
+                    Text("Cliente",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PiumsOrange,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
             }
         }
 
         Spacer(Modifier.height(8.dp))
 
-        // Account section
+        // ── Sección: Cuenta ──
         ProfileSectionTitle("Cuenta")
         ProfileItem(
-            icon  = Icons.Default.Lock,
+            icon = Icons.Default.Person,
+            label = "Editar perfil",
+            onClick = { vm.startEditName(); showEditProfile = true }
+        )
+        ProfileItem(
+            icon = Icons.Default.Lock,
             label = "Cambiar contraseña",
             onClick = { vm.showPasswordDialog(true) }
         )
-        // Google Calendar
-        GoogleCalendarRow(
-            isConnected = calendarState.connected,
-            email       = calendarState.email ?: calendarState.calendarEmail,
-            onConnect   = { vm.connectGoogleCalendar(context) },
-            onDisconnect = { vm.disconnectCalendar() }
-        )
         ProfileItem(
-            icon  = Icons.Default.CreditCard,
-            label = "Historial de pagos",
+            icon = Icons.Default.CreditCard,
+            label = "Mis pagos",
             onClick = onPaymentsClick
         )
         ProfileItem(
-            icon  = Icons.Default.CreditCard,
+            icon = Icons.Default.Wallet,
             label = "Tarjetas guardadas",
             onClick = onWalletClick
         )
-        ProfileItemWithBadge(
-            icon  = Icons.Default.VerifiedUser,
-            label = "Verificar identidad",
-            badge = when (vm.tokenStorage.identityVerificationStatus) {
-                "approved" -> "Verificado" to Color(0xFF22C55E)
-                "pending"  -> "Pendiente" to Color(0xFFF59E0B)
-                else       -> null
-            },
+        ProfileItem(
+            icon = Icons.Default.DeleteForever,
+            label = "Eliminar cuenta",
+            onClick = { showDeleteConfirm = true },
+            tint = MaterialTheme.colorScheme.error
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // ── Sección: Verificación ──
+        ProfileSectionTitle("Verificación")
+        IdentityVerificationRow(
+            status = vm.identityStatus,
             onClick = onIdentityVerificationClick
         )
 
-        // Biometric toggle — only shown when hardware is available
+        Spacer(Modifier.height(4.dp))
+
+        // ── Sección: Integraciones ──
+        ProfileSectionTitle("Integraciones")
+        GoogleCalendarRow(
+            isConnected = calendarState.connected,
+            email = calendarState.email ?: calendarState.calendarEmail,
+            onConnect = { vm.connectGoogleCalendar(context) },
+            onDisconnect = { vm.disconnectCalendar() }
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // ── Sección: Apariencia ──
+        ProfileSectionTitle("Apariencia")
+        ProfileToggleRow(
+            icon = Icons.Default.DarkMode,
+            label = "Modo oscuro",
+            enabled = vm.isDarkMode,
+            onToggle = { vm.toggleDarkMode() }
+        )
         if (biometricAvailable) {
             ProfileBiometricRow(
-                enabled  = vm.biometricEnabled,
+                enabled = vm.biometricEnabled,
                 onToggle = { enable ->
                     if (enable) {
                         biometricHelper.authenticate(
-                            title    = "Activar desbloqueo biométrico",
+                            title = "Activar desbloqueo biométrico",
                             subtitle = "Confirma tu identidad para activar esta opción",
                             onSuccess = { vm.toggleBiometric(true) }
                         )
@@ -426,68 +453,29 @@ fun ProfileScreen(
             )
         }
 
-        // Dark mode toggle
-        ProfileToggleRow(
-            icon    = Icons.Default.DarkMode,
-            label   = "Modo oscuro",
-            enabled = vm.isDarkMode,
-            onToggle = { vm.toggleDarkMode() }
-        )
+        Spacer(Modifier.height(4.dp))
 
-        Spacer(Modifier.height(8.dp))
-
-        // App section
+        // ── Sección: Ayuda y soporte ──
         ProfileSectionTitle("Ayuda y soporte")
-        ProfileItem(
-            icon  = Icons.Default.Gavel,
-            label = "Mis quejas",
-            onClick = onDisputesClick
-        )
-        ProfileItem(
-            icon  = Icons.Default.NotificationsNone,
-            label = "Preferencias de notificaciones",
-            onClick = onNotifPrefsClick
-        )
-        ProfileItem(
-            icon  = Icons.Default.HelpOutline,
-            label = "¿Cómo funciona Piums?",
-            onClick = onTutorialClick
-        )
-        ProfileItem(
-            icon  = Icons.Default.Article,
-            label = "Términos y condiciones",
-            onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://piums.io/terminos")))
-            }
-        )
-        ProfileItem(
-            icon  = Icons.Default.Shield,
-            label = "Política de privacidad",
-            onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://piums.io/privacidad")))
-            }
-        )
-        ProfileItem(
-            icon  = Icons.Default.SupportAgent,
-            label = "Soporte",
-            onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW,
-                    Uri.parse("mailto:soporte@piums.io")))
-            }
-        )
-        ProfileItem(
-            icon  = Icons.Default.Info,
-            label = "Versión 1.0.0",
-            onClick = {},
-            showChevron = false,
-            tint = MaterialTheme.colorScheme.onBackground.copy(0.4f)
-        )
+        ProfileItem(icon = Icons.Default.NotificationsNone, label = "Preferencias de notificaciones",
+            onClick = onNotifPrefsClick)
+        ProfileItem(icon = Icons.Default.HelpOutline, label = "¿Cómo funciona Piums?",
+            onClick = onTutorialClick)
+        ProfileItem(icon = Icons.Default.Gavel, label = "Mis quejas",
+            onClick = onDisputesClick)
+        ProfileItem(icon = Icons.Default.Article, label = "Términos y condiciones",
+            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://piums.io/terminos"))) })
+        ProfileItem(icon = Icons.Default.Shield, label = "Política de privacidad",
+            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://piums.io/privacidad"))) })
+        ProfileItem(icon = Icons.Default.SupportAgent, label = "Contactar soporte",
+            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("mailto:soporte@piums.io"))) })
+        ProfileItem(icon = Icons.Default.Info, label = "Versión 1.0.0",
+            onClick = {}, showChevron = false,
+            tint = MaterialTheme.colorScheme.onBackground.copy(0.4f))
 
         Spacer(Modifier.height(16.dp))
 
-        // Logout
+        // ── Cerrar sesión ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -497,58 +485,62 @@ fun ProfileScreen(
                 .clickable(enabled = !vm.isLoggingOut) { showLogoutConfirm = true }
                 .padding(16.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (vm.isLoggingOut) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Default.Logout, null,
-                        tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Logout, null, tint = MaterialTheme.colorScheme.error)
                 }
-                Text("Cerrar sesión", style = MaterialTheme.typography.bodyMedium,
+                Text("Cerrar Sesión", style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Delete account
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.error.copy(0.04f))
-                .clickable(enabled = !vm.isDeletingAccount) { showDeleteConfirm = true }
-                .padding(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (vm.isDeletingAccount) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Default.DeleteForever, null,
-                        tint = MaterialTheme.colorScheme.error.copy(0.6f))
-                }
-                Text("Eliminar cuenta", style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.error.copy(0.6f))
             }
         }
 
         vm.deleteAccountError?.let {
             Text(it, color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 20.dp))
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         }
 
         Spacer(Modifier.height(32.dp))
+    }
+
+    // ── Edit profile dialog ──
+    if (showEditProfile) {
+        AlertDialog(
+            onDismissRequest = { showEditProfile = false; vm.cancelEditName() },
+            title = { Text("Editar perfil", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = vm.nameInput,
+                    onValueChange = vm::onNameInputChange,
+                    singleLine = true,
+                    label = { Text("Nombre completo") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PiumsOrange,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { vm.saveName(); showEditProfile = false },
+                    enabled = vm.nameInput.isNotBlank() && !vm.isSavingName
+                ) {
+                    if (vm.isSavingName) CircularProgressIndicator(color = PiumsOrange,
+                        modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text("Guardar", color = PiumsOrange, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditProfile = false; vm.cancelEditName() }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     // Password dialog
@@ -776,6 +768,94 @@ private fun ProfileBiometricRow(enabled: Boolean, onToggle: (Boolean) -> Unit) {
         modifier = Modifier.padding(start = 54.dp),
         color = MaterialTheme.colorScheme.outline.copy(0.07f)
     )
+}
+
+@Composable
+private fun IdentityVerificationRow(status: String?, onClick: () -> Unit) {
+    when (status) {
+        "approved" -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.VerifiedUser, null,
+                    tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Identidad verificada",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF22C55E))
+                    Text("Tu identidad ha sido confirmada",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(0.5f))
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outline.copy(0.07f))
+        }
+        "pending" -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.HourglassTop, null,
+                        tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Documentos enviados",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("En revisión — hasta 48 horas hábiles",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(0.5f))
+                    }
+                }
+                LinearProgressIndicator(
+                    progress = { 0.6f },
+                    modifier = Modifier.fillMaxWidth().padding(start = 34.dp),
+                    color = Color(0xFFF59E0B),
+                    trackColor = Color(0xFFF59E0B).copy(0.2f)
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outline.copy(0.07f))
+        }
+        else -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Icon(Icons.Default.VerifiedUser, null,
+                    tint = PiumsOrange, modifier = Modifier.size(20.dp))
+                Text("Verificar identidad",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f))
+                Surface(shape = RoundedCornerShape(50), color = PiumsOrange.copy(0.1f)) {
+                    Text("Requerida",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PiumsOrange,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                }
+                Icon(Icons.Default.ChevronRight, null,
+                    tint = MaterialTheme.colorScheme.onBackground.copy(0.3f),
+                    modifier = Modifier.size(18.dp))
+            }
+            HorizontalDivider(modifier = Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outline.copy(0.07f))
+        }
+    }
 }
 
 @Composable

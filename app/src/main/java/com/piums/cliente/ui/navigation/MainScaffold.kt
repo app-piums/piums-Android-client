@@ -152,10 +152,7 @@ fun MainScaffold(
         mainVm.deepLinkManager.pending.collect { target ->
             when (target) {
                 is DeepLinkTarget.Artist -> innerNav.navigate("artist/${target.id}")
-                is DeepLinkTarget.Booking -> innerNav.navigate(Tab.MYSPACE.route) {
-                    popUpTo(innerNav.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true; restoreState = true
-                }
+                is DeepLinkTarget.Booking -> innerNav.navigate("booking-detail/${target.id}")
                 is DeepLinkTarget.Inbox -> innerNav.navigate(Tab.INBOX.route) {
                     popUpTo(innerNav.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true; restoreState = true
@@ -268,8 +265,9 @@ fun MainScaffold(
                                 launchSingleTop = true; restoreState = true
                             }
                         },
-                        onSearchByDate       = { date, lat, lng ->
-                            innerNav.navigate("search-by-date?date=$date&lat=$lat&lng=$lng")
+                        onSearchByDate       = { date, lat, lng, location ->
+                            val enc = java.net.URLEncoder.encode(location, "UTF-8")
+                            innerNav.navigate("search-by-date?date=$date&lat=$lat&lng=$lng&location=$enc")
                         }
                     )
                 }
@@ -313,7 +311,16 @@ fun MainScaffold(
                         onBook   = { id -> innerNav.navigate("booking/$id") }
                     )
                 }
-                composable("booking/{artistId}") { entry ->
+                composable(
+                    route = "booking/{artistId}?date={date}&lat={lat}&lng={lng}&location={location}",
+                    arguments = listOf(
+                        navArgument("artistId") { type = NavType.StringType },
+                        navArgument("date")     { type = NavType.StringType; defaultValue = ""; nullable = true },
+                        navArgument("lat")      { type = NavType.StringType; defaultValue = "0"; nullable = true },
+                        navArgument("lng")      { type = NavType.StringType; defaultValue = "0"; nullable = true },
+                        navArgument("location") { type = NavType.StringType; defaultValue = ""; nullable = true },
+                    )
+                ) { entry ->
                     val artistId = entry.arguments?.getString("artistId") ?: return@composable
                     BookingScreen(
                         artistId = artistId,
@@ -372,24 +379,34 @@ fun MainScaffold(
                     NotificationPreferencesScreen(onBack = { innerNav.popBackStack() })
                 }
                 composable(
-                    route = "search-by-date?date={date}&lat={lat}&lng={lng}",
+                    route = "search-by-date?date={date}&lat={lat}&lng={lng}&location={location}",
                     arguments = listOf(
-                        navArgument("date") { type = NavType.StringType; defaultValue = "" },
-                        navArgument("lat")  { type = NavType.FloatType;  defaultValue = 0f },
-                        navArgument("lng")  { type = NavType.FloatType;  defaultValue = 0f },
+                        navArgument("date")     { type = NavType.StringType; defaultValue = "" },
+                        navArgument("lat")      { type = NavType.FloatType;  defaultValue = 0f },
+                        navArgument("lng")      { type = NavType.FloatType;  defaultValue = 0f },
+                        navArgument("location") { type = NavType.StringType; defaultValue = ""; nullable = true },
                     )
                 ) { entry ->
-                    val dateStr = entry.arguments?.getString("date") ?: ""
-                    val lat = (entry.arguments?.getFloat("lat") ?: 0f).toDouble()
-                    val lng = (entry.arguments?.getFloat("lng") ?: 0f).toDouble()
+                    val dateStr  = entry.arguments?.getString("date") ?: ""
+                    val lat      = (entry.arguments?.getFloat("lat") ?: 0f).toDouble()
+                    val lng      = (entry.arguments?.getFloat("lng") ?: 0f).toDouble()
+                    val location = entry.arguments?.getString("location")
+                        ?.let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrNull() }
+                        ?.takeIf { it.isNotBlank() }
                     ArtistSearchByDateScreen(
-                        onBack        = { innerNav.popBackStack() },
-                        onArtistClick = { artistId, _ -> innerNav.navigate("artist/$artistId") },
-                        initialDate   = dateStr.takeIf { it.isNotBlank() }?.let {
+                        onBack           = { innerNav.popBackStack() },
+                        onArtistClick    = { artistId, date, lat, lng, locationLabel ->
+                            val locEnc = java.net.URLEncoder.encode(locationLabel, "UTF-8")
+                            val latStr = lat?.toString() ?: "0"
+                            val lngStr = lng?.toString() ?: "0"
+                            innerNav.navigate("booking/$artistId?date=$date&lat=$latStr&lng=$lngStr&location=$locEnc")
+                        },
+                        initialDate      = dateStr.takeIf { it.isNotBlank() }?.let {
                             runCatching { LocalDate.parse(it) }.getOrNull()
                         },
-                        initialLat    = lat.takeIf { it != 0.0 },
-                        initialLng    = lng.takeIf { it != 0.0 }
+                        initialLat       = lat.takeIf { it != 0.0 },
+                        initialLng       = lng.takeIf { it != 0.0 },
+                        initialLocation  = location
                     )
                 }
                 composable("tutorial") {

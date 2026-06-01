@@ -51,7 +51,9 @@ data class ArtistDto(
     val baseLocationLat: Double?,
     val baseLocationLng: Double?,
     val createdAt: String?,
+    @com.google.gson.annotations.SerializedName(value = "avatar", alternate = ["avatarUrl"])
     val avatar: String? = null,
+    @com.google.gson.annotations.SerializedName(value = "coverUrl", alternate = ["coverImage", "coverPhoto"])
     val coverUrl: String? = null,
     val instagram: String? = null,
     val website: String? = null,
@@ -194,15 +196,23 @@ data class PricingCalculateRequest(
     val duration: Int,
     val locationLat: Double?,
     val locationLng: Double?,
+    val distanceKm: Double?,
     val numDays: Int = 1
 )
 
 data class PricingCalculateResponse(
     val totalCents: Int?,
     val total: Int?,
-    val breakdown: PricingBreakdown?
+    val breakdown: PricingBreakdown?,
+    val items: List<PriceLineItem>?
 ) {
     val totalAmount: Int get() = totalCents ?: total ?: 0
 }
 
 data class PricingBreakdown(val baseCents: Int?, val travelCents: Int?)
+
+data class PriceLineItem(
+    val type: String,
+    val name: String,
+    val totalPriceCents: Int
+)

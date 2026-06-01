@@ -31,10 +31,14 @@ data class UserDto(
     val nombre: String?,
     val role: String,
     val avatar: String?,
-    val isVerified: Boolean?
+    val isVerified: Boolean?,
+    val documentFrontUrl: String? = null,
+    val documentSelfieUrl: String? = null
 ) {
     val displayName: String get() = nombre?.takeIf { it.isNotBlank() } ?: email
     val avatarUrl: String? get() = avatar
+    val hasSubmittedIdentity: Boolean get() = documentFrontUrl != null && documentSelfieUrl != null
+    val identityApproved: Boolean get() = isVerified == true
 }
 
 data class MeResponse(val user: UserDto?, val id: String?, val email: String?,
@@ -44,4 +48,6 @@ data class MeResponse(val user: UserDto?, val id: String?, val email: String?,
         id = id ?: "", email = email ?: "", nombre = nombre,
         role = role ?: "cliente", avatar = avatar, isVerified = isVerified
     )
+    val resolvedIsVerified: Boolean get() = user?.isVerified ?: isVerified ?: false
+    val resolvedDocumentFrontUrl: String? get() = user?.documentFrontUrl
 }

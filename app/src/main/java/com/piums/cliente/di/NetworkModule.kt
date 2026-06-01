@@ -2,6 +2,12 @@ package com.piums.cliente.di
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.TypeAdapter
+import com.google.gson.TypeAdapterFactory
+import com.google.gson.reflect.TypeToken
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
+import com.google.gson.stream.JsonWriter
 import com.piums.cliente.BuildConfig
 import com.piums.cliente.data.local.TokenStorage
 import com.piums.cliente.data.remote.AuthInterceptor
@@ -20,6 +26,28 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
+// Gson adapter: acepta números decimales (15.0) para campos Int/Int? del backend
+// El backend usa JS/Node que no distingue int de double — p.ej. "servicesCount": 3.0
+@Suppress("UNCHECKED_CAST")
+private object FlexibleIntAdapterFactory : TypeAdapterFactory {
+    override fun <T> create(gson: Gson, type: TypeToken<T>): TypeAdapter<T>? {
+        if (type.rawType != Int::class.java && type.rawType != java.lang.Integer::class.java) return null
+        val isPrimitive = type.rawType == Int::class.java
+        return object : TypeAdapter<T>() {
+            override fun write(out: JsonWriter, value: T?) {
+                if (value == null) out.nullValue() else out.value((value as Int).toLong())
+            }
+            override fun read(reader: JsonReader): T? = when (reader.peek()) {
+                JsonToken.NULL    -> { reader.nextNull(); if (isPrimitive) 0 as T else null }
+                JsonToken.NUMBER  -> reader.nextDouble().toInt() as T
+                JsonToken.STRING  -> (reader.nextString().toDoubleOrNull()?.toInt() ?: 0) as T
+                JsonToken.BOOLEAN -> (if (reader.nextBoolean()) 1 else 0) as T
+                else              -> { reader.skipValue(); if (isPrimitive) 0 as T else null }
+            }
+        } as TypeAdapter<T>
+    }
+}
+
 // SHA-256 pins for client.piums.io
 // Obtén el pin real con: openssl s_client -connect client.piums.io:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64
 // TODO: reemplazar el pin del leaf cert con el valor real antes de release
@@ -33,7 +61,10 @@ private val CERTIFICATE_PINNER = CertificatePinner.Builder()
 object NetworkModule {
 
     @Provides @Singleton
-    fun provideGson(): Gson = GsonBuilder().setLenient().create()
+    fun provideGson(): Gson = GsonBuilder()
+        .setLenient()
+        .registerTypeAdapterFactory(FlexibleIntAdapterFactory)
+        .create()
 
     @Provides @Singleton
     fun provideOkHttpClient(

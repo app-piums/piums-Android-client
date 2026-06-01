@@ -86,21 +86,52 @@ class BookingDetailViewModel @Inject constructor(
     var collaborators by mutableStateOf<List<BookingCollaborator>>(emptyList())
         private set
 
+    var replacementSearch by mutableStateOf<ReplacementSearchDto?>(null)
+        private set
+    var replacementAction by mutableStateOf<String?>(null)
+        private set
+
     init { load() }
 
     fun load() {
         viewModelScope.launch {
             isLoading = true
             error = null
-            booking = runCatching { api.getBooking(bookingId) }.getOrElse {
+            val loaded = runCatching { api.getBooking(bookingId) }.getOrElse {
                 error = "No se pudo cargar la reserva"
                 null
             }
+            booking = loaded
             isLoading = false
+            if (loaded?.status == "CANCELLED_ARTIST") loadReplacementSearch()
         }
         viewModelScope.launch {
             runCatching { api.getBookingCollaborators(bookingId) }
                 .onSuccess { collaborators = it.all.filter { c -> c.status == "ACCEPTED" } }
+        }
+    }
+
+    private fun loadReplacementSearch() {
+        viewModelScope.launch {
+            replacementSearch = runCatching { api.getReplacementSearch(bookingId) }.getOrNull()
+        }
+    }
+
+    fun acceptReplacement() {
+        viewModelScope.launch {
+            replacementAction = "accepting"
+            runCatching { api.acceptReplacement(bookingId) }
+                .onSuccess { replacementSearch = replacementSearch?.copy(status = "SEARCHING") }
+            replacementAction = null
+        }
+    }
+
+    fun declineReplacement() {
+        viewModelScope.launch {
+            replacementAction = "declining"
+            runCatching { api.declineReplacement(bookingId) }
+                .onSuccess { replacementSearch = replacementSearch?.copy(status = "OPTED_OUT") }
+            replacementAction = null
         }
     }
 
@@ -237,6 +268,18 @@ fun BookingDetailScreen(
                 ) {
                     // Hero: centered status circle + code
                     StatusHero(booking)
+
+                    // Reemplazo de artista
+                    if (booking.status == "CANCELLED_ARTIST") {
+                        vm.replacementSearch?.let { rep ->
+                            ReplacementCard(
+                                replacement    = rep,
+                                action         = vm.replacementAction,
+                                onAccept       = vm::acceptReplacement,
+                                onDecline      = vm::declineReplacement
+                            )
+                        }
+                    }
 
                     // Participantes
                     DetailCard(title = "Participantes") {
@@ -820,14 +863,22 @@ private fun StatusHero(booking: BookingDto) {
     val status = booking.statusEnum
     val statusColor = Color(status.color)
     val statusIcon = when (status) {
-        BookingStatus.CONFIRMED, BookingStatus.PAYMENT_COMPLETED -> Icons.Default.CheckCircle
-        BookingStatus.COMPLETED       -> Icons.Default.TaskAlt
-        BookingStatus.PENDING, BookingStatus.RESCHEDULED -> Icons.Default.HourglassTop
-        BookingStatus.PAYMENT_PENDING -> Icons.Default.CreditCard
-        BookingStatus.IN_PROGRESS     -> Icons.Default.PlayCircle
-        BookingStatus.CANCELLED_CLIENT, BookingStatus.CANCELLED_ARTIST,
-        BookingStatus.REJECTED        -> Icons.Default.Cancel
-        BookingStatus.NO_SHOW         -> Icons.Default.PersonOff
+        BookingStatus.CONFIRMED,
+        BookingStatus.PAYMENT_COMPLETED,
+        BookingStatus.DISPUTE_RESOLVED          -> Icons.Default.CheckCircle
+        BookingStatus.COMPLETED,
+        BookingStatus.DELIVERED                 -> Icons.Default.TaskAlt
+        BookingStatus.PENDING,
+        BookingStatus.RESCHEDULED,
+        BookingStatus.RESCHEDULE_PENDING_ARTIST,
+        BookingStatus.RESCHEDULE_PENDING_CLIENT -> Icons.Default.HourglassTop
+        BookingStatus.PAYMENT_PENDING           -> Icons.Default.CreditCard
+        BookingStatus.IN_PROGRESS               -> Icons.Default.PlayCircle
+        BookingStatus.DISPUTE_OPEN              -> Icons.Default.ReportProblem
+        BookingStatus.CANCELLED_CLIENT,
+        BookingStatus.CANCELLED_ARTIST,
+        BookingStatus.REJECTED                  -> Icons.Default.Cancel
+        BookingStatus.NO_SHOW                   -> Icons.Default.PersonOff
     }
     Column(
         modifier             = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -1017,4 +1068,111 @@ private fun addToCalendar(context: android.content.Context, booking: BookingDto)
         booking.location?.let { putExtra(CalendarContract.Events.EVENT_LOCATION, it) }
     }
     runCatching { context.startActivity(intent) }
+}
+
+// ─── Replacement Card ─────────────────────────────────────────────────────────
+
+@Composable
+private fun ReplacementCard(
+    replacement: ReplacementSearchDto,
+    action: String?,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    val isIdle = action == null
+    Card(
+        shape  = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF59E0B).copy(0.08f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(0.25f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF59E0B).copy(0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PersonSearch, null,
+                        tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Buscar artista de reemplazo",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold)
+                    Text("El artista canceló tu reserva.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                }
+            }
+
+            when (replacement.status.uppercase()) {
+                "PENDING", "OFFERED" -> {
+                    Text(
+                        "Encontramos artistas disponibles para tu fecha. ¿Deseas que busquemos un reemplazo?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.75f)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick  = onDecline,
+                            enabled  = isIdle,
+                            modifier = Modifier.weight(1f),
+                            shape    = RoundedCornerShape(10.dp)
+                        ) {
+                            if (action == "declining") {
+                                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("Declinar")
+                            }
+                        }
+                        Button(
+                            onClick  = onAccept,
+                            enabled  = isIdle,
+                            modifier = Modifier.weight(1f),
+                            shape    = RoundedCornerShape(10.dp),
+                            colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                        ) {
+                            if (action == "accepting") {
+                                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp,
+                                    color = Color.White)
+                            } else {
+                                Text("Aceptar", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+                "SEARCHING" -> {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp,
+                            color = Color(0xFFF59E0B))
+                        Text("Buscando artista de reemplazo...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.7f))
+                    }
+                }
+                "OPTED_OUT" -> {
+                    Text("Rechazaste la búsqueda de reemplazo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                }
+                "EXPIRED" -> {
+                    Text("La búsqueda de reemplazo ha expirado.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                }
+                else -> {
+                    Text("Estado: ${replacement.status}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                }
+            }
+        }
+    }
 }

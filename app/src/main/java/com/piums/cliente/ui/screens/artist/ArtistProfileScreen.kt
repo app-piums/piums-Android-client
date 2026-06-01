@@ -56,6 +56,8 @@ class ArtistProfileViewModel @Inject constructor(
 
     var services by mutableStateOf<List<ArtistServiceDto>>(emptyList())
         private set
+    var servicesError by mutableStateOf<String?>(null)
+        private set
 
     var reviews by mutableStateOf<List<ReviewDto>>(emptyList())
         private set
@@ -95,7 +97,7 @@ class ArtistProfileViewModel @Inject constructor(
             error = null
             try {
                 val artistDeferred    = async { runCatching { api.getArtist(artistId) }.getOrNull() }
-                val servicesDeferred  = async { runCatching { api.getArtistServices(artistId) }.getOrNull() }
+                val servicesDeferred  = async { runCatching { api.getArtistServices(artistId) } }
                 val reviewsDeferred   = async { runCatching { api.getReviews(artistId, limit = 5) }.getOrNull() }
                 val portfolioDeferred = async { runCatching { api.getArtistPortfolio(artistId) }.getOrNull() }
                 val favDeferred       = async { runCatching { api.checkFavorite(entityId = artistId) }.getOrNull() }
@@ -103,8 +105,10 @@ class ArtistProfileViewModel @Inject constructor(
                 val artistResponse = artistDeferred.await()
                 artist         = artistResponse?.resolved
                 certifications = artistResponse?.resolvedCertifications ?: emptyList()
-                val loadedServices = servicesDeferred.await()?.list ?: emptyList()
-                services  = loadedServices
+                val servicesResult = servicesDeferred.await()
+                val loadedServices = servicesResult.getOrNull()?.list ?: emptyList()
+                services      = loadedServices
+                servicesError = if (servicesResult.isFailure) "Error del servidor. Intenta más tarde" else null
                 reviews   = reviewsDeferred.await()?.list ?: emptyList()
                 portfolio = portfolioDeferred.await()?.list ?: emptyList()
                 favDeferred.await()?.let { fav ->
@@ -152,6 +156,63 @@ class ArtistProfileViewModel @Inject constructor(
         }
     }
 
+    // ── Escribir reseña ───────────────────────────────────────────────────────
+    var showWriteReview by mutableStateOf(false)
+        private set
+    var reviewBookings by mutableStateOf<List<BookingDto>>(emptyList())
+        private set
+    var selectedReviewBookingId by mutableStateOf<String?>(null)
+        private set
+    var reviewRating by mutableStateOf(0)
+        private set
+    var reviewComment by mutableStateOf("")
+        private set
+    var isLoadingReviewBookings by mutableStateOf(false)
+        private set
+    var isSubmittingReview by mutableStateOf(false)
+        private set
+    var reviewError by mutableStateOf<String?>(null)
+        private set
+    var reviewSuccess by mutableStateOf(false)
+        private set
+
+    fun openWriteReview() {
+        showWriteReview = true
+        reviewRating = 0; reviewComment = ""; reviewError = null; reviewSuccess = false
+        viewModelScope.launch {
+            isLoadingReviewBookings = true
+            val res = runCatching { api.getBookings(status = "COMPLETED", limit = 50) }.getOrNull()
+            reviewBookings = res?.list?.filter { it.artistId == artistId } ?: emptyList()
+            selectedReviewBookingId = reviewBookings.firstOrNull()?.id
+            isLoadingReviewBookings = false
+        }
+    }
+
+    fun closeWriteReview() { showWriteReview = false }
+    fun onRatingChange(r: Int)     { reviewRating = r }
+    fun onCommentChange(c: String) { reviewComment = c }
+    fun selectReviewBooking(id: String) { selectedReviewBookingId = id }
+
+    fun submitReview() {
+        val bid = selectedReviewBookingId ?: return
+        if (reviewRating == 0) { reviewError = "Selecciona una calificación"; return }
+        viewModelScope.launch {
+            isSubmittingReview = true; reviewError = null
+            runCatching {
+                api.createReview(CreateReviewRequest(
+                    artistId  = artistId,
+                    bookingId = bid,
+                    rating    = reviewRating,
+                    comment   = reviewComment.ifBlank { null }
+                ))
+            }.onSuccess {
+                reviewSuccess = true
+                reviews = runCatching { api.getReviews(artistId, limit = 5) }
+                    .getOrNull()?.list ?: reviews
+            }.onFailure { reviewError = "No se pudo enviar la reseña. Intenta de nuevo." }
+            isSubmittingReview = false
+        }
+    }
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -164,7 +225,8 @@ fun ArtistProfileScreen(
     onBook: (String) -> Unit,
     vm: ArtistProfileViewModel = hiltViewModel()
 ) {
-    var isRefreshing by remember { mutableStateOf(false) }
+    var isRefreshing  by remember { mutableStateOf(false) }
+    var detailService by remember { mutableStateOf<ArtistServiceDto?>(null) }
     LaunchedEffect(vm.isLoading) { if (!vm.isLoading) isRefreshing = false }
 
     PullToRefreshBox(
@@ -227,21 +289,73 @@ fun ArtistProfileScreen(
                         item { CertificationsSection(certs = vm.certifications) }
                     }
 
-                    // Services
-                    if (vm.services.isNotEmpty()) {
-                        item { SectionTitle("Servicios") }
-                        item {
+                    // Services — siempre visible
+                    item { SectionTitle("Servicios") }
+                    item {
+                        if (vm.services.isNotEmpty()) {
                             ServicesSection(
-                                services  = vm.services,
-                                dayOffers = vm.dayOffers,
-                                onBook    = { onBook(artistId) }
+                                services        = vm.services,
+                                dayOffers       = vm.dayOffers,
+                                onBook          = { onBook(artistId) },
+                                onServiceDetail = { detailService = it }
                             )
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "Sin servicios disponibles",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(0.5f)
+                                )
+                                vm.servicesError?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    // Reviews
-                    if (vm.reviews.isNotEmpty()) {
-                        item { SectionTitle("Reseñas") }
+                    // Reviews — siempre visible para poder escribir reseña
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Reseñas",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground)
+                            TextButton(onClick = { vm.openWriteReview() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.StarRate, null,
+                                    tint = PiumsOrange, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Escribir reseña",
+                                    color = PiumsOrange,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    if (vm.reviews.isEmpty()) {
+                        item {
+                            Text("Aún no hay reseñas",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(0.45f),
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                        }
+                    } else {
                         items(vm.reviews) { review ->
                             ReviewItem(review = review)
                         }
@@ -272,6 +386,35 @@ fun ArtistProfileScreen(
         }
     }
     } // PullToRefreshBox
+
+    // Service detail sheet
+    detailService?.let { svc ->
+        ServiceDetailSheet(
+            service   = svc,
+            onDismiss = { detailService = null },
+            onBook    = { detailService = null; onBook(artistId) }
+        )
+    }
+
+    // Write review sheet
+    if (vm.showWriteReview) {
+        WriteReviewSheet(
+            artistName          = vm.artist?.let { it.name ?: it.nombre } ?: "",
+            bookings            = vm.reviewBookings,
+            selectedBookingId   = vm.selectedReviewBookingId,
+            rating              = vm.reviewRating,
+            comment             = vm.reviewComment,
+            isLoading           = vm.isLoadingReviewBookings,
+            isSubmitting        = vm.isSubmittingReview,
+            error               = vm.reviewError,
+            success             = vm.reviewSuccess,
+            onSelectBooking     = vm::selectReviewBooking,
+            onRatingChange      = vm::onRatingChange,
+            onCommentChange     = vm::onCommentChange,
+            onSubmit            = vm::submitReview,
+            onDismiss           = vm::closeWriteReview
+        )
+    }
 }
 
 // ─── Profile Header ───────────────────────────────────────────────────────────
@@ -539,7 +682,8 @@ private fun SectionTitle(title: String) {
 private fun ServicesSection(
     services: List<ArtistServiceDto>,
     dayOffers: Map<String, com.piums.cliente.data.remote.dto.ServiceDayOffer> = emptyMap(),
-    onBook: () -> Unit
+    onBook: () -> Unit,
+    onServiceDetail: (ArtistServiceDto) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -548,7 +692,8 @@ private fun ServicesSection(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         services.forEach { svc ->
-            ServiceCard(service = svc, dayOffer = dayOffers[svc.id], onBook = onBook)
+            ServiceCard(service = svc, dayOffer = dayOffers[svc.id],
+                onBook = onBook, onDetail = { onServiceDetail(svc) })
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -562,7 +707,8 @@ private fun ServicesSection(
 private fun ServiceCard(
     service: ArtistServiceDto,
     dayOffer: com.piums.cliente.data.remote.dto.ServiceDayOffer? = null,
-    onBook: () -> Unit
+    onBook: () -> Unit,
+    onDetail: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -639,25 +785,41 @@ private fun ServiceCard(
                 }
             }
 
-            // Per-service book button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Brush.linearGradient(listOf(PiumsOrange, Color(0xFFFF8438))))
-                    .clickable(onClick = onBook),
-                contentAlignment = Alignment.Center
+            // Botones: Ver detalles + Reservar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                OutlinedButton(
+                    onClick = onDetail,
+                    modifier = Modifier.weight(1f).height(38.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, PiumsOrange.copy(0.5f)),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Icon(Icons.Default.CalendarMonth, null,
-                        tint = Color.White, modifier = Modifier.size(15.dp))
-                    Text("Reservar", color = Color.White,
+                    Text("Ver detalles", color = PiumsOrange,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodySmall)
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Brush.linearGradient(listOf(PiumsOrange, Color(0xFFFF8438))))
+                        .clickable(onClick = onBook),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.CalendarMonth, null,
+                            tint = Color.White, modifier = Modifier.size(15.dp))
+                        Text("Reservar", color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -949,6 +1111,339 @@ private fun PortfolioGrid(items: List<PortfolioItem>) {
                 ) {
                     Icon(Icons.Default.Close, contentDescription = "Cerrar",
                         tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+            }
+        }
+    }
+}
+
+// ─── ServiceDetailSheet ───────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServiceDetailSheet(
+    service: ArtistServiceDto,
+    onDismiss: () -> Unit,
+    onBook: () -> Unit
+) {
+    val pricingLabel = when (service.pricingType) {
+        "FIXED"   -> "Precio fijo"
+        "HOURLY"  -> "Por hora"
+        "PACKAGE" -> "Paquete"
+        else      -> null
+    }
+    val durationLabel = service.durationMin?.let { min ->
+        if (service.durationMax != null && service.durationMax != min)
+            "$min–${service.durationMax} min"
+        else if (min >= 60) {
+            val h = min / 60; val m = min % 60
+            if (m == 0) "$h h" else "$h h $m min"
+        } else "$min min"
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor   = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Cabecera servicio
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PiumsOrange.copy(0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.MusicNote, null, tint = PiumsOrange,
+                        modifier = Modifier.size(24.dp))
+                }
+                Column(modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(service.name, style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold)
+                    service.description?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Text(service.formattedPrice, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold, color = PiumsOrange)
+            }
+
+            // Duración + tipo de precio
+            if (durationLabel != null || pricingLabel != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    durationLabel?.let {
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.AccessTime, null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+                                modifier = Modifier.size(14.dp))
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                        }
+                    }
+                    pricingLabel?.let {
+                        Text("·", color = MaterialTheme.colorScheme.onSurface.copy(0.3f))
+                        Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                    }
+                }
+            }
+
+            // Qué incluye
+            val included = service.whatIsIncluded?.filter { it.isNotBlank() } ?: emptyList()
+            if (included.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Qué incluye", style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold)
+                    included.forEach { item ->
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(Icons.Default.CheckCircle, null, tint = PiumsOrange,
+                                modifier = Modifier.size(16.dp))
+                            Text(item, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.1f))
+
+            // Botón Reservar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(PiumsOrange, Color(0xFFFF8438))))
+                    .clickable(onClick = onBook),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.CalendarMonth, null,
+                        tint = Color.White, modifier = Modifier.size(18.dp))
+                    Text("Reservar", color = Color.White, fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        }
+    }
+}
+
+// ─── WriteReviewSheet ─────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WriteReviewSheet(
+    artistName: String,
+    bookings: List<BookingDto>,
+    selectedBookingId: String?,
+    rating: Int,
+    comment: String,
+    isLoading: Boolean,
+    isSubmitting: Boolean,
+    error: String?,
+    success: Boolean,
+    onSelectBooking: (String) -> Unit,
+    onRatingChange: (Int) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            when {
+                isLoading -> {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PiumsOrange)
+                    }
+                }
+                success -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = PiumsOrange,
+                            modifier = Modifier.size(52.dp))
+                        Text("¡Reseña enviada!", style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold)
+                        Text("Gracias por compartir tu experiencia.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                        TextButton(onClick = onDismiss) {
+                            Text("Cerrar", color = PiumsOrange, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                bookings.isEmpty() -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.EventBusy, null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                            modifier = Modifier.size(44.dp))
+                        Text("Sin reservas completadas",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("Solo puedes dejar una reseña después de completar una reserva con este artista.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                            textAlign = TextAlign.Center)
+                        TextButton(onClick = onDismiss) {
+                            Text("Cerrar", color = PiumsOrange)
+                        }
+                    }
+                }
+                else -> {
+                    // Título
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Escribir reseña", style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        Text(artistName, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                    }
+
+                    // Selector de reserva (si hay más de una)
+                    if (bookings.size > 1) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Reserva a reseñar",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold)
+                            bookings.forEach { booking ->
+                                val sel = selectedBookingId == booking.id
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (sel) PiumsOrange.copy(0.1f)
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                        .clickable { onSelectBooking(booking.id) }
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        if (sel) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                        null,
+                                        tint = if (sel) PiumsOrange else MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column {
+                                        Text(booking.resolvedArtistName ?: artistName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold)
+                                        Text(booking.scheduledDate.take(10),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Estrellas
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Calificación", style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            repeat(5) { i ->
+                                Icon(
+                                    if (i < rating) Icons.Default.Star else Icons.Default.StarBorder,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF59E0B),
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable { onRatingChange(i + 1) }
+                                )
+                            }
+                        }
+                        val ratingLabel = listOf("", "Malo", "Regular", "Bueno", "Muy bueno", "Excelente")
+                            .getOrElse(rating) { "" }
+                        if (ratingLabel.isNotEmpty()) {
+                            Text(ratingLabel, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+                        }
+                    }
+
+                    // Comentario
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = onCommentChange,
+                        label = { Text("Comentario (opcional)") },
+                        placeholder = { Text("Cuéntanos tu experiencia con el artista...") },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                        minLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = PiumsOrange,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
+                        )
+                    )
+
+                    error?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    // Botón enviar
+                    Button(
+                        onClick = onSubmit,
+                        enabled = rating > 0 && !isSubmitting,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PiumsOrange),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        if (isSubmitting) {
+                            CircularProgressIndicator(color = Color.White,
+                                modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Enviar reseña", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
                 }
             }
         }

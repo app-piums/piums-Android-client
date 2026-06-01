@@ -2,6 +2,7 @@ package com.piums.cliente.data.remote.dto
 
 import com.google.gson.TypeAdapter
 import com.google.gson.annotations.JsonAdapter
+import com.google.gson.annotations.SerializedName
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
 import com.google.gson.stream.JsonWriter
@@ -71,7 +72,7 @@ data class BookingDto(
     val totalPrice: Int,
     val scheduledDate: String,
     val scheduledTime: String?,
-    val duration: Int?,
+    @SerializedName("durationMinutes") val duration: Int?,
     val notes: String?,
     val location: String?,
     val locationLat: Double?,
@@ -112,8 +113,13 @@ enum class BookingStatus(val raw: String, val displayName: String, val color: Lo
     PAYMENT_PENDING("PAYMENT_PENDING", "Pago pendiente", 0xFFF59E0B),
     PAYMENT_COMPLETED("PAYMENT_COMPLETED", "Pago completado", 0xFF22C55E),
     IN_PROGRESS("IN_PROGRESS", "En progreso", 0xFF3B82F6),
+    DELIVERED("DELIVERED", "Entregado", 0xFF22C55E),
     COMPLETED("COMPLETED", "Completada", 0xFF22C55E),
     RESCHEDULED("RESCHEDULED", "Reprogramada", 0xFF8B5CF6),
+    RESCHEDULE_PENDING_ARTIST("RESCHEDULE_PENDING_ARTIST", "Cambio pendiente", 0xFF8B5CF6),
+    RESCHEDULE_PENDING_CLIENT("RESCHEDULE_PENDING_CLIENT", "Confirmar cambio", 0xFF8B5CF6),
+    DISPUTE_OPEN("DISPUTE_OPEN", "Disputa abierta", 0xFFEF4444),
+    DISPUTE_RESOLVED("DISPUTE_RESOLVED", "Disputa resuelta", 0xFF22C55E),
     CANCELLED_CLIENT("CANCELLED_CLIENT", "Cancelada por ti", 0xFFEF4444),
     CANCELLED_ARTIST("CANCELLED_ARTIST", "Cancelada por artista", 0xFFEF4444),
     REJECTED("REJECTED", "Rechazada", 0xFFEF4444),
@@ -152,6 +158,15 @@ data class CreateBookingRequest(
 data class RescheduleRequest(
     val scheduledDate: String,
     val reason: String?
+)
+
+data class ReplacementSearchDto(
+    val status: String,
+    val expiresAt: String?,
+    val matchedArtistIds: List<String> = emptyList(),
+    val category: String?,
+    val city: String?,
+    val scheduledDate: String?
 )
 
 enum class EventType(val apiValue: String, val displayName: String) {

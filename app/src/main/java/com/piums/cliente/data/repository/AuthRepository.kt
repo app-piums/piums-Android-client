@@ -84,6 +84,11 @@ class AuthRepository @Inject constructor(
             tokenStorage.userName  = u.nombre
             tokenStorage.userEmail = u.email
             tokenStorage.avatarUrl = u.avatar
+            tokenStorage.identityVerificationStatus = when {
+                u.identityApproved        -> "approved"
+                u.hasSubmittedIdentity    -> "pending"
+                else                      -> "not_submitted"
+            }
         }
     }
 }

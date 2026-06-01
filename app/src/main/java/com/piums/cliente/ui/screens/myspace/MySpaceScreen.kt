@@ -41,7 +41,10 @@ import com.piums.cliente.ui.theme.PiumsWarning
 import com.piums.cliente.ui.theme.PiumsSuccess
 import com.piums.cliente.ui.theme.PiumsError
 import com.piums.cliente.ui.theme.PiumsInfo
+import android.content.Intent
+import android.provider.CalendarContract
 import android.util.Log
+import androidx.compose.ui.platform.LocalContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -418,17 +421,22 @@ private fun BookingCard(
     var showCancel by remember { mutableStateOf(false) }
 
     val statusIcon = when (status) {
-        BookingStatus.PENDING         -> Icons.Default.Schedule
-        BookingStatus.CONFIRMED       -> Icons.Default.CheckCircle
-        BookingStatus.PAYMENT_PENDING -> Icons.Default.CreditCard
-        BookingStatus.COMPLETED       -> Icons.Default.Star
+        BookingStatus.PENDING                   -> Icons.Default.Schedule
+        BookingStatus.CONFIRMED                 -> Icons.Default.CheckCircle
+        BookingStatus.PAYMENT_PENDING           -> Icons.Default.CreditCard
+        BookingStatus.COMPLETED,
+        BookingStatus.DELIVERED                 -> Icons.Default.Star
         BookingStatus.CANCELLED_CLIENT,
         BookingStatus.CANCELLED_ARTIST,
-        BookingStatus.REJECTED        -> Icons.Default.Cancel
-        BookingStatus.RESCHEDULED     -> Icons.Default.Refresh
+        BookingStatus.REJECTED                  -> Icons.Default.Cancel
+        BookingStatus.RESCHEDULED,
+        BookingStatus.RESCHEDULE_PENDING_ARTIST,
+        BookingStatus.RESCHEDULE_PENDING_CLIENT -> Icons.Default.Refresh
         BookingStatus.IN_PROGRESS,
-        BookingStatus.PAYMENT_COMPLETED -> Icons.Default.CheckCircle
-        BookingStatus.NO_SHOW         -> Icons.Default.Warning
+        BookingStatus.PAYMENT_COMPLETED,
+        BookingStatus.DISPUTE_RESOLVED          -> Icons.Default.CheckCircle
+        BookingStatus.DISPUTE_OPEN              -> Icons.Default.ReportProblem
+        BookingStatus.NO_SHOW                   -> Icons.Default.Warning
     }
 
     val shortDate = remember(booking.scheduledDate) {
@@ -772,6 +780,7 @@ private fun EventsTab(vm: MySpaceViewModel) {
 @Composable
 private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit = {}) {
     var showDelete by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -796,6 +805,52 @@ private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit 
                     IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Edit, null,
                             tint = PiumsOrange.copy(0.7f),
+                            modifier = Modifier.size(16.dp))
+                    }
+                    // Agregar al calendario del dispositivo
+                    event.eventDate?.let { dateStr ->
+                        IconButton(
+                            onClick = {
+                                val beginMs = runCatching {
+                                    java.time.LocalDate.parse(dateStr.take(10))
+                                        .atStartOfDay(java.time.ZoneId.systemDefault())
+                                        .toInstant().toEpochMilli()
+                                }.getOrElse { System.currentTimeMillis() }
+                                val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI).apply {
+                                    putExtra(CalendarContract.Events.TITLE, event.name)
+                                    putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, beginMs)
+                                    putExtra(CalendarContract.EXTRA_EVENT_END_TIME, beginMs + 3_600_000)
+                                    event.location?.let { putExtra(CalendarContract.Events.EVENT_LOCATION, it) }
+                                    event.notes?.let { putExtra(CalendarContract.Events.DESCRIPTION, it) }
+                                }
+                                runCatching { context.startActivity(intent) }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.CalendarToday, null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(0.4f),
+                                modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    // Compartir evento
+                    IconButton(
+                        onClick = {
+                            val text = buildString {
+                                append(event.name)
+                                event.eventDate?.let { append(" — ${it.take(10)}") }
+                                event.location?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
+                                event.code?.let { append("\nCodigo: $it") }
+                            }
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            runCatching { context.startActivity(Intent.createChooser(intent, "Compartir evento")) }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Share, null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(0.4f),
                             modifier = Modifier.size(16.dp))
                     }
                     IconButton(onClick = { showDelete = true }, modifier = Modifier.size(36.dp)) {
