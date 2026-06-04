@@ -500,7 +500,7 @@ data class BookingCollaboratorsResponse(
 // ── Google Calendar ───────────────────────────────────────────────────────────
 
 data class GoogleCalendarStatusResponse(
-    val connected: Boolean,
+    @com.google.gson.annotations.SerializedName("enabled") val connected: Boolean = false,
     val email: String? = null,
     val calendarEmail: String? = null
 )

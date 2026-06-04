@@ -88,6 +88,8 @@ class MySpaceViewModel @Inject constructor(
         private set
     var isLoadingFavorites by mutableStateOf(true)
         private set
+    var favoriteArtistCache by mutableStateOf<Map<String, ArtistDto>>(emptyMap())
+        private set
 
     init { refresh() }
 
@@ -127,6 +129,7 @@ class MySpaceViewModel @Inject constructor(
             isLoadingCoupons   = false
 
             prefetchArtistNames(bookings)
+            prefetchFavoriteArtists(favorites)
         }
     }
 
@@ -149,11 +152,44 @@ class MySpaceViewModel @Inject constructor(
         }
     }
 
+    private fun prefetchFavoriteArtists(list: List<FavoriteDto>) {
+        val missing = list
+            .filter { it.entityType == "ARTIST" }
+            .map { it.entityId }
+            .distinct()
+            .filter { it.isNotBlank() && it !in favoriteArtistCache }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            val fetched = mutableMapOf<String, ArtistDto>()
+            missing.map { id ->
+                async {
+                    runCatching { api.getArtist(id) }
+                        .getOrNull()?.resolved
+                        ?.let { fetched[id] = it }
+                }
+            }.forEach { it.await() }
+            if (fetched.isNotEmpty()) favoriteArtistCache = favoriteArtistCache + fetched
+        }
+    }
+
     fun filterBookings(status: String?) { bookingFilter = status }
 
+    private val filterGroups = mapOf(
+        "PENDING"   to setOf("PENDING", "CARD_AUTHORIZED"),
+        "CONFIRMED" to setOf("CONFIRMED", "ANTICIPO_PAID", "IN_PROGRESS"),
+        "COMPLETED" to setOf("COMPLETED", "DELIVERED"),
+        "CANCELLED" to setOf("CANCELLED_CLIENT", "CANCELLED_ARTIST", "REJECTED", "NO_SHOW"),
+    )
+
     val filteredBookings: List<BookingDto> get() {
-        val list = if (bookingFilter == null) bookings
-                   else bookings.filter { it.status == bookingFilter }
+        val list = when (bookingFilter) {
+            null -> bookings
+            else -> {
+                val group = filterGroups[bookingFilter]
+                if (group != null) bookings.filter { it.status in group }
+                else bookings.filter { it.status == bookingFilter }
+            }
+        }
         return list.sortedBy { it.scheduledDate }
     }
 
@@ -342,12 +378,11 @@ private fun BookingsTab(
     onArtistClick: (String) -> Unit = {}
 ) {
     val statusFilters = listOf(
-        null            to "Todas",
-        "PENDING"       to "Pendiente",
-        "CONFIRMED"     to "Confirmada",
-        "PAYMENT_PENDING" to "Pago pend.",
-        "COMPLETED"     to "Completada",
-        "CANCELLED_CLIENT" to "Cancelada"
+        null         to "Todas",
+        "PENDING"    to "Pendientes",
+        "CONFIRMED"  to "Confirmadas",
+        "COMPLETED"  to "Completadas",
+        "CANCELLED"  to "Canceladas"
     )
 
     Column(Modifier.fillMaxSize()) {
@@ -720,10 +755,18 @@ private fun BookingCard(
     }
 
     if (showCancel) {
+        val cancelMessage = when (booking.paymentStatus) {
+            "CARD_AUTHORIZED" -> "Tu reserva será cancelada. No se realizará ningún cobro."
+            "ANTICIPO_PAID"   -> {
+                val refund = String.format("%.2f", (booking.anticipoAmount ?: 0) * 0.5 / 100.0)
+                "Se aplicará una penalidad del 50%. Recibirás un reembolso de $$refund."
+            }
+            else              -> "Esta acción no se puede deshacer."
+        }
         AlertDialog(
             onDismissRequest = { showCancel = false },
             title = { Text("¿Cancelar reserva?") },
-            text  = { Text("Esta acción no se puede deshacer.") },
+            text  = { Text(cancelMessage) },
             confirmButton = {
                 TextButton(onClick = { showCancel = false; onCancel() }) {
                     Text("Cancelar reserva", color = MaterialTheme.colorScheme.error)
@@ -937,13 +980,15 @@ private fun FavoritesTab(
         EmptyTabState(icon = Icons.Default.FavoriteBorder, message = "Sin favoritos guardados")
     } else {
         LazyColumn(
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(vm.favorites, key = { it.id }) { fav ->
                 FavoriteCard(
-                    fav = fav,
-                    onClick = { fav.artist?.resolvedId?.takeIf { it.isNotEmpty() }?.let { onArtistClick(it) } },
+                    fav    = fav,
+                    artist = vm.favoriteArtistCache[fav.entityId] ?: fav.artist,
+                    onClick = { if (fav.entityId.isNotEmpty()) onArtistClick(fav.entityId) },
                     onRemove = { vm.removeFavorite(fav.id) }
                 )
             }
@@ -953,8 +998,7 @@ private fun FavoritesTab(
 }
 
 @Composable
-private fun FavoriteCard(fav: FavoriteDto, onClick: () -> Unit, onRemove: () -> Unit) {
-    val artist = fav.artist
+private fun FavoriteCard(fav: FavoriteDto, artist: ArtistDto?, onClick: () -> Unit, onRemove: () -> Unit) {
     Card(
         onClick   = onClick,
         modifier  = Modifier.fillMaxWidth(),

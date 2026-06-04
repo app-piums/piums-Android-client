@@ -397,9 +397,17 @@ fun BookingDetailScreen(
                             booking.scheduledTime?.let { add("HORA" to it.take(5)) }
                             booking.duration?.let { add("DURACIÓN" to "${it} min") }
                             add("ESTADO" to booking.statusEnum.displayName)
-                            booking.paymentStatus?.let {
-                                add("PAGO" to it.replace("_", " ").lowercase()
-                                    .replaceFirstChar { c -> c.uppercase() })
+                            booking.paymentStatus?.let { ps ->
+                                val displayStatus = when (ps) {
+                                    "CARD_AUTHORIZED"    -> "Tarjeta pre-autorizada"
+                                    "ANTICIPO_PAID"      -> "Anticipo pagado"
+                                    "FULLY_PAID"         -> "Pagado completo"
+                                    "PENDING"            -> "Pago pendiente"
+                                    "CHARGING_REMAINING" -> "Cobrando saldo"
+                                    "REFUNDED"           -> "Reembolsado"
+                                    else -> ps.replace("_", " ").lowercase().replaceFirstChar { c -> c.uppercase() }
+                                }
+                                add("PAGO" to displayStatus)
                             }
                         }
                         // 2-column grid

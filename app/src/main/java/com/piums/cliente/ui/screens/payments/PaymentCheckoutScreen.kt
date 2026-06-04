@@ -94,11 +94,14 @@ class PaymentCheckoutViewModel @Inject constructor(
 
     private fun loadBooking() {
         viewModelScope.launch {
-            runCatching { api.getBooking(bookingId) }.onSuccess { b ->
-                booking = b
-                // Load artist to get countryCode (needed for Tilopay routing)
-                runCatching { api.getArtist(b.artistId) }.onSuccess { artist = it.resolved }
-            }
+            runCatching { api.getBooking(bookingId) }
+                .onSuccess { b ->
+                    booking = b
+                    runCatching { api.getArtist(b.artistId) }.onSuccess { artist = it.resolved }
+                }
+                .onFailure {
+                    phase = PaymentPhase.Error("No pudimos cargar tu reserva. Verifica tu conexión e intenta de nuevo.")
+                }
         }
     }
 
@@ -188,10 +191,11 @@ class PaymentCheckoutViewModel @Inject constructor(
         delay(3_000)
         val b = runCatching { api.getBooking(bId) }.getOrNull()
         if (b != null) {
-            val paid = b.paymentStatus == "ANTICIPO_PAID" ||
-                       b.paymentStatus == "FULLY_PAID"    ||
-                       b.paymentStatus == "COMPLETED"     ||
-                       b.status == "CONFIRMED"            ||
+            val paid = b.paymentStatus == "ANTICIPO_PAID"    ||
+                       b.paymentStatus == "FULLY_PAID"       ||
+                       b.paymentStatus == "COMPLETED"        ||
+                       b.paymentStatus == "CARD_AUTHORIZED"  ||
+                       b.status == "CONFIRMED"               ||
                        b.status == "COMPLETED"
             if (paid) { confirmedBooking = b; phase = PaymentPhase.Confirmed; return }
         }

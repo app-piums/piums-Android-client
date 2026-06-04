@@ -44,7 +44,7 @@ class PiumsFcmService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val type           = message.data["type"] ?: message.notification?.let { "GENERIC" } ?: return
-        val entityId       = message.data["entityId"]
+        val entityId       = message.data["entityId"] ?: message.data["bookingId"]
         val conversationId = message.data["conversationId"] ?: message.data["chatId"]
         val title          = message.data["title"]   ?: message.notification?.title ?: "Piums"
         val body           = message.data["message"] ?: message.notification?.body  ?: ""

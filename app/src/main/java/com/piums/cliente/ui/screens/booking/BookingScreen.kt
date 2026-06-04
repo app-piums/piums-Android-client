@@ -1858,9 +1858,10 @@ private fun ConfirmRow(icon: String, label: String, value: String) {
             modifier = Modifier.size(18.dp)
         )
         Text(label, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.5f),
-            modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+        Spacer(Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
     }
 }
 
@@ -2226,10 +2227,15 @@ private fun BookingSuccessScreen(
             Text("Próximos Pasos", style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 
+            val cardAuthorized = booking.paymentStatus == "CARD_AUTHORIZED"
             val steps: List<Pair<Boolean, String>> = if (paymentPending) listOf(
                 Pair(true,  "Completa el pago del anticipo para confirmar tu reserva."),
                 Pair(false, "$artistDisplayName será notificado cuando el pago sea recibido."),
                 Pair(false, "El saldo restante se cobra automáticamente 72h antes del evento.")
+            ) else if (cardAuthorized) listOf(
+                Pair(true,  "Tu tarjeta fue pre-autorizada exitosamente. El cobro se realizará cuando el artista confirme."),
+                Pair(false, "$artistDisplayName revisará tu solicitud y confirmará en las próximas horas."),
+                Pair(false, "Si no confirma, la retención en tu tarjeta se libera automáticamente.")
             ) else listOf(
                 Pair(true,  "$artistDisplayName revisará tu solicitud de reserva en las próximas 24 horas."),
                 Pair(false, "Recibirás una notificación por correo una vez sea confirmada."),

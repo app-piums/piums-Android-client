@@ -513,7 +513,18 @@ private fun MonthlyCalendar(
                         maxLines = 1
                     )
                     val subtitle = buildString {
-                        append(nextBooking.scheduledDate.take(10))
+                        val dateStr = nextBooking.scheduledDate.take(10)
+                        val parsed = runCatching {
+                            java.time.LocalDate.parse(dateStr)
+                        }.getOrNull()
+                        if (parsed != null) {
+                            val fmt = java.time.format.DateTimeFormatter.ofPattern(
+                                "EEE, d MMM", java.util.Locale("es", "ES")
+                            )
+                            append(parsed.format(fmt).replaceFirstChar { it.uppercase() })
+                        } else {
+                            append(dateStr)
+                        }
                         nextBooking.scheduledTime?.let { append(" · $it") }
                     }
                     Text(subtitle,

@@ -29,6 +29,7 @@ class DeepLinkManager @Inject constructor() {
             "BOOKING_CANCELLED",
             "BOOKING_UPDATED",
             "BOOKING_COMPLETED",
+            "PAYMENT_CAPTURE_FAILED",
             "RESCHEDULE_REQUEST",
             "RESCHEDULE_REQUESTED",
             "RESCHEDULE_APPROVED",

@@ -130,6 +130,15 @@ enum class BookingStatus(val raw: String, val displayName: String, val color: Lo
     }
 }
 
+enum class PaymentStatus {
+    PENDING, CARD_AUTHORIZED, ANTICIPO_PAID, CHARGING_REMAINING,
+    FULLY_PAID, PARTIALLY_REFUNDED, REFUNDED, FROZEN, FAILED, UNKNOWN;
+
+    companion object {
+        fun from(s: String?) = values().firstOrNull { it.name == s } ?: UNKNOWN
+    }
+}
+
 data class BookingsListResponse(
     val bookings: List<BookingDto>?,
     val data: List<BookingDto>?,
