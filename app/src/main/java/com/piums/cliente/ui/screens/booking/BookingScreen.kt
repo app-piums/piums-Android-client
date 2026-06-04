@@ -1469,24 +1469,63 @@ private fun ConfirmStep(vm: BookingViewModel) {
         val hasTravel = vm.pricingResult?.items?.any { it.type == "TRAVEL" } == true ||
             (vm.pricingResult?.breakdown?.travelCents ?: 0) > 0
         if (hasTravel) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.Top
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Icons.Default.Info, null,
-                    tint = PiumsOrange, modifier = Modifier.size(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Default.Info, null,
+                        tint = PiumsOrange, modifier = Modifier.size(18.dp))
+                    Text(
+                        "Los viáticos cubren transporte, alimentación y hospedaje del artista.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
+                        lineHeight = 16.sp
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Default.Warning, null,
+                        tint = PiumsOrange.copy(0.7f), modifier = Modifier.size(18.dp))
+                    Text(
+                        "El costo de desplazamiento es estimado según la ubicación ingresada y puede variar ligeramente.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+        // ── Política de cancelación ──
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFFFFDE7))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                Icon(Icons.Default.Warning, null,
+                    tint = Color(0xFFF9A825), modifier = Modifier.size(16.dp))
                 Text(
-                    "Los viáticos cubren transporte, alimentación y hospedaje del artista.",
+                    "Política de Cancelación",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
-                    lineHeight = 16.sp
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF795800)
                 )
             }
+            Text(
+                "Dentro de las primeras 48h desde la creación de la reserva: cancelación gratuita.",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF795800).copy(0.8f),
+                lineHeight = 16.sp,
+                modifier = Modifier.padding(start = 24.dp)
+            )
         }
 
         // ── Coupon section ──
