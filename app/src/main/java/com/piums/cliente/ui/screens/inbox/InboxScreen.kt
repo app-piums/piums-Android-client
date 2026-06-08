@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -483,25 +485,28 @@ internal fun ChatScreen(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.1f))
 
-        if (isLoading) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = PiumsOrange)
-            }
-        } else if (messages.isEmpty()) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text("Envía el primer mensaje",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(0.4f))
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(messages, key = { it.id }) { msg ->
-                    MessageBubble(message = msg, isOwn = msg.senderId == myUserId)
+        Box(modifier = Modifier.weight(1f)) {
+            ChatBackgroundPattern(modifier = Modifier.fillMaxSize())
+            if (isLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PiumsOrange)
+                }
+            } else if (messages.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Envía el primer mensaje",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(0.4f))
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(messages, key = { it.id }) { msg ->
+                        MessageBubble(message = msg, isOwn = msg.senderId == myUserId)
+                    }
                 }
             }
         }
@@ -745,6 +750,39 @@ private fun CreateDisputeDialog(
             TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
     )
+}
+
+// ─── Chat background pattern ─────────────────────────────────────────────────
+
+@Composable
+private fun ChatBackgroundPattern(modifier: Modifier = Modifier) {
+    val icons = listOf(
+        Icons.Outlined.MusicNote, Icons.Outlined.CameraAlt,
+        Icons.Outlined.Videocam, Icons.Outlined.Celebration,
+        Icons.Outlined.Headphones, Icons.Outlined.Palette,
+        Icons.Outlined.AutoAwesome, Icons.Outlined.Edit
+    )
+    BoxWithConstraints(modifier = modifier) {
+        val tileSize = 80.dp
+        val cols = (maxWidth / tileSize).toInt() + 2
+        val rows = (maxHeight / tileSize).toInt() + 2
+        repeat(rows) { row ->
+            repeat(cols) { col ->
+                val icon = icons[(row * cols + col) % icons.size]
+                val offsetX = tileSize * col + if (row % 2 == 0) 0.dp else tileSize / 2
+                val offsetY = tileSize * row
+                Icon(
+                    imageVector        = icon,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
+                    modifier           = Modifier
+                        .size(26.dp)
+                        .absoluteOffset(x = offsetX, y = offsetY)
+                        .rotate(-15f)
+                )
+            }
+        }
+    }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
