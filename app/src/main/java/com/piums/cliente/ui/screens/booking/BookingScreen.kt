@@ -33,6 +33,7 @@ import com.piums.cliente.utils.LocationHelper
 import com.piums.cliente.data.remote.PiumsApiService
 import com.piums.cliente.data.remote.dto.*
 import com.piums.cliente.ui.components.LocationMapPickerSheet
+import com.piums.cliente.ui.screens.myspace.EventFormSheet
 import com.piums.cliente.ui.components.LocationSearchField
 import com.piums.cliente.ui.theme.PiumsOrange
 import com.piums.cliente.ui.theme.PiumsSuccess
@@ -168,6 +169,9 @@ class BookingViewModel @Inject constructor(
         private set
 
     private var locationSearchJob: Job? = null
+
+    // Create event inline
+    var showCreateEvent by mutableStateOf(false)
 
     // Step 3 — Confirm
     var showConfirmModal by mutableStateOf(false)
@@ -362,6 +366,19 @@ class BookingViewModel @Inject constructor(
     fun selectEvent(eventId: String?) { selectedEventId = eventId }
     fun toggleEventType(type: EventType) { selectedEventType = if (selectedEventType == type) null else type }
     fun onNotesChange(v: String) { notes = v }
+
+    fun createEvent(name: String, date: String?, location: String?, notes: String?, description: String? = null) {
+        viewModelScope.launch {
+            val newEvent = runCatching {
+                api.createEvent(CreateEventRequest(name = name, eventDate = date, location = location, notes = notes, description = description))
+            }.getOrNull()
+            if (newEvent != null) {
+                userEvents = listOf(newEvent) + userEvents
+                selectedEventId = newEvent.id
+            }
+            showCreateEvent = false
+        }
+    }
 
     fun calculatePrice() {
         val svc  = selectedService ?: return
@@ -1043,6 +1060,24 @@ private fun DetailsStep(vm: BookingViewModel) {
                 onSelect        = vm::selectEvent
             )
         }
+
+        TextButton(
+            onClick = { vm.showCreateEvent = true },
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+        ) {
+            Icon(Icons.Default.AddCircle, contentDescription = null, tint = PiumsOrange, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Crear nuevo evento", color = PiumsOrange)
+        }
+    }
+
+    if (vm.showCreateEvent) {
+        EventFormSheet(
+            onDismiss = { vm.showCreateEvent = false },
+            onSave = { name, date, location, notes, description ->
+                vm.createEvent(name, date, location, notes, description)
+            }
+        )
     }
 
     if (showMapPicker) {
