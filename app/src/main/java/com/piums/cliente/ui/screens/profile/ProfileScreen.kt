@@ -248,7 +248,9 @@ class ProfileViewModel @Inject constructor(
 
     fun connectGoogleCalendar(context: Context) {
         val token = tokenStorage.accessToken ?: return
-        val url = "https://backend.piums.io/api/auth/google/calendar-connect?token=$token"
+        val returnUrl = "piums://auth/callback?calendarConnected=true"
+        val encodedReturn = android.net.Uri.encode(returnUrl)
+        val url = "https://backend.piums.io/api/auth/google/calendar-connect?token=$token&return_url=$encodedReturn"
         CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
     }
 
