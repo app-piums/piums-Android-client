@@ -5,6 +5,10 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.piums.cliente.data.local.TokenStorage
 import com.piums.cliente.data.remote.PiumsApiService
 import com.piums.cliente.data.remote.dto.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,6 +74,14 @@ class AuthRepository @Inject constructor(
                 u.identityApproved        -> "approved"
                 u.hasSubmittedIdentity    -> "pending"
                 else                      -> "not_submitted"
+            }
+        }
+        // Firebase suele generar el token FCM antes del login, así que onNewToken
+        // no lo envía (aún sin sesión). Lo re-sincronizamos aquí tras autenticar.
+        tokenStorage.fcmToken?.let { fcmToken ->
+            CoroutineScope(Dispatchers.IO).launch {
+                delay(3_000) // evita sumar al burst de requests post-login
+                runCatching { api.registerPushToken(FcmTokenRequest(fcmToken)) }
             }
         }
     }
