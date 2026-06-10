@@ -48,12 +48,17 @@ private object FlexibleIntAdapterFactory : TypeAdapterFactory {
     }
 }
 
-// SHA-256 pins for client.piums.io
+// SHA-256 pins for client.piums.io (verificados 2026-06-10)
 // Obtén el pin real con: openssl s_client -connect client.piums.io:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64
-// TODO: reemplazar el pin del leaf cert con el valor real antes de release
+// El dominio está detrás de Cloudflare: el cert edge rota ~90 días y el emisor
+// puede alternar entre Let's Encrypt y Google Trust Services, por eso se
+// incluyen pins de respaldo a nivel raíz de ambas CAs.
 private val CERTIFICATE_PINNER = CertificatePinner.Builder()
-    .add("client.piums.io", "sha256/REEMPLAZAR_CON_PIN_REAL_DEL_LEAF_CERT=")
-    .add("client.piums.io", "sha256/jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=") // Let's Encrypt E8 (intermediate)
+    .add("client.piums.io", "sha256/ER8v0GmGJasfGMzQ5zfDC86y7MQaWq1o+JgQ8Ob2z6c=") // leaf piums.io (vence 2026-07-21)
+    .add("client.piums.io", "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=") // Let's Encrypt E8 (intermediate)
+    .add("client.piums.io", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=") // ISRG Root X1 (backup)
+    .add("client.piums.io", "sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=") // GTS Root R1 (backup Cloudflare)
+    .add("client.piums.io", "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=") // GTS Root R4 (backup Cloudflare)
     .build()
 
 @Module

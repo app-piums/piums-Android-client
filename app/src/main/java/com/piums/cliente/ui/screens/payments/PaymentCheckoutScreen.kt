@@ -711,7 +711,7 @@ private fun TilopayWebSheet(
                         setSupportZoom(true)
                         builtInZoomControls  = false
                         displayZoomControls  = false
-                        mixedContentMode     = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        mixedContentMode     = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                         userAgentString      = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
                     webViewClient = object : WebViewClient() {
@@ -750,10 +750,11 @@ private fun TilopayWebSheet(
                             return false
                         }
 
-                        // Accept any SSL cert — payment pages sometimes use intermediate certs
+                        // Nunca aceptar certs inválidos en la página de pago:
+                        // un MITM aquí captura datos de tarjeta.
                         override fun onReceivedSslError(
                             view: WebView, handler: SslErrorHandler, error: SslError
-                        ) = handler.proceed()
+                        ) = handler.cancel()
                     }
                     loadUrl(url)
                 }

@@ -12,3 +12,7 @@ local.properties
 google-services.json
 *.hprof
 .claude/
+
+# macOS AppleDouble (disco ExFAT)
+._*
+.DS_Store

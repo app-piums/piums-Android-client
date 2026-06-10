@@ -1,7 +1,7 @@
 # Retrofit + Gson
 -keepattributes Signature
 -keepattributes *Annotation*
--keep class com.piums.artist.core.network.** { *; }
+-keep class com.piums.cliente.data.remote.dto.** { *; }
 -keep class retrofit2.** { *; }
 -keep interface retrofit2.** { *; }
 -keep class com.google.gson.** { *; }
