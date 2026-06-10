@@ -70,6 +70,9 @@ data class BookingDto(
     val status: String,
     val paymentStatus: String?,
     val totalPrice: Int,
+    val servicePrice: Int? = null,
+    val addonsPrice: Int? = null,
+    val travelPrice: Int? = null,
     val scheduledDate: String,
     val scheduledTime: String?,
     @SerializedName("durationMinutes") val duration: Int?,
@@ -87,7 +90,10 @@ data class BookingDto(
     val anticipoAmount: Int? = null,
     val currency: String? = null,
     val couponCode: String? = null,
-    val discountAmount: Int? = null
+    val discountAmount: Int? = null,
+    val attendanceCode: String? = null,
+    @SerializedName("requiresProductDelivery") val requiresProductDelivery: Boolean? = null,
+    val productDeliveryUrl: String? = null
 ) {
     // artistName (campo raíz) tiene prioridad sobre el nombre anidado en user.nombre
     // que puede ser un ID autogenerado del sistema

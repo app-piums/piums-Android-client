@@ -1,5 +1,6 @@
 package com.piums.cliente.ui.screens.booking
 
+import android.content.Context
 import android.content.Intent
 import android.provider.CalendarContract
 import androidx.compose.animation.AnimatedVisibility
@@ -390,6 +391,67 @@ fun BookingDetailScreen(
                         }
                     }
 
+                    // Attendance code box
+                    if (booking.status in listOf("CONFIRMED", "IN_PROGRESS") &&
+                        !booking.attendanceCode.isNullOrEmpty()) {
+                        val attCode = booking.attendanceCode!!
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0xFF2563EB).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF2563EB).copy(alpha = 0.06f))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    "CÓDIGO DE ASISTENCIA",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 1.sp
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    attCode.forEach { digit ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(width = 36.dp, height = 44.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.surfaceVariant,
+                                                    RoundedCornerShape(8.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                digit.toString(),
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF2563EB)
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    "Dáselo al artista cuando llegue",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                                TextButton(onClick = {
+                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clip = android.content.ClipData.newPlainText("codigo_asistencia", attCode)
+                                    cm.setPrimaryClip(clip)
+                                }) {
+                                    Text("Copiar código", color = Color(0xFF2563EB))
+                                }
+                            }
+                        }
+                    }
+
                     // Información del Evento (2-column grid)
                     DetailCard(title = "Información del Evento") {
                         val cells = buildList {
@@ -514,8 +576,15 @@ fun BookingDetailScreen(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            val currency = booking.currency
+                            val serviceBase = booking.servicePrice ?: booking.totalPrice
+                            val serviceFmt = "$${String.format("%,.2f", serviceBase / 100.0)}"
                             if (booking.anticipoRequired == true && booking.anticipoAmount != null) {
-                                PaymentRow("Precio del servicio", booking.formattedTotal)
+                                PaymentRow("Servicio base", serviceFmt)
+                                if ((booking.travelPrice ?: 0) > 0)
+                                    PaymentRow("Viáticos / traslado", "$${String.format("%,.2f", booking.travelPrice!! / 100.0)}")
+                                if ((booking.addonsPrice ?: 0) > 0)
+                                    PaymentRow("Add-ons", "$${String.format("%,.2f", booking.addonsPrice!! / 100.0)}")
                                 val anticipo = booking.anticipoAmount
                                 val formatted = "$${String.format("%,.2f", anticipo / 100.0)}"
                                 val remaining = booking.totalPrice - anticipo
@@ -523,7 +592,11 @@ fun BookingDetailScreen(
                                 PaymentRow("Anticipo (50%)", formatted, valueColor = PiumsOrange)
                                 PaymentRow("Saldo restante", remainingFmt)
                             } else {
-                                PaymentRow("Precio del servicio", booking.formattedTotal)
+                                PaymentRow("Servicio base", serviceFmt)
+                                if ((booking.travelPrice ?: 0) > 0)
+                                    PaymentRow("Viáticos / traslado", "$${String.format("%,.2f", booking.travelPrice!! / 100.0)}")
+                                if ((booking.addonsPrice ?: 0) > 0)
+                                    PaymentRow("Add-ons", "$${String.format("%,.2f", booking.addonsPrice!! / 100.0)}")
                             }
                             if (booking.couponCode != null && booking.discountAmount != null && booking.discountAmount > 0) {
                                 val discountFmt = "-$${String.format("%,.2f", booking.discountAmount / 100.0)}"

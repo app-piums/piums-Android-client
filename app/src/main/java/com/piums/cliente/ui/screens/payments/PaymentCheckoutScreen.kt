@@ -450,15 +450,24 @@ private fun PriceBreakdownCard(booking: BookingDto, amountToPay: Int) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.15f))
 
         val currency = booking.currency
+        val serviceBase = booking.servicePrice ?: booking.totalPrice
         if (booking.anticipoRequired == true && booking.anticipoAmount != null) {
             val rest = booking.totalPrice - booking.anticipoAmount
-            PriceRow("Servicio", formatCents(booking.totalPrice, currency))
+            PriceRow("Servicio base", formatCents(serviceBase, currency))
+            if ((booking.travelPrice ?: 0) > 0)
+                PriceRow("Viáticos / traslado", formatCents(booking.travelPrice!!, currency))
+            if ((booking.addonsPrice ?: 0) > 0)
+                PriceRow("Add-ons", formatCents(booking.addonsPrice!!, currency))
             PriceRow("Anticipo (50%)", formatCents(booking.anticipoAmount, currency),
                 highlight = true)
             PriceRow("Saldo restante", formatCents(rest, currency),
                 note = "Se cobra automáticamente 72h antes", dimmed = true)
         } else {
-            PriceRow("Servicio", formatCents(booking.totalPrice, currency))
+            PriceRow("Servicio base", formatCents(serviceBase, currency))
+            if ((booking.travelPrice ?: 0) > 0)
+                PriceRow("Viáticos / traslado", formatCents(booking.travelPrice!!, currency))
+            if ((booking.addonsPrice ?: 0) > 0)
+                PriceRow("Add-ons", formatCents(booking.addonsPrice!!, currency))
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.15f))
