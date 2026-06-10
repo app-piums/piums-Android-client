@@ -45,6 +45,7 @@ import android.content.Intent
 import android.provider.CalendarContract
 import android.util.Log
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.clickable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -230,12 +231,12 @@ class MySpaceViewModel @Inject constructor(
 
     fun showCreateEvent(show: Boolean) { showCreateEvent = show }
 
-    fun createEvent(name: String, date: String?, location: String?, notes: String?) {
+    fun createEvent(name: String, date: String?, location: String?, notes: String?, description: String? = null) {
         viewModelScope.launch {
             runCatching {
                 val ev = api.createEvent(CreateEventRequest(
                     name = name, eventDate = date, location = location,
-                    notes = notes, description = null
+                    notes = notes, description = description
                 ))
                 events = listOf(ev) + events
             }
@@ -247,25 +248,51 @@ class MySpaceViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { api.deleteEvent(id) }
             events = events.filter { it.id != id }
+            if (selectedEvent?.id == id) selectedEvent = null
         }
     }
 
     var editingEvent by mutableStateOf<EventDto?>(null)
         private set
 
+    var selectedEvent by mutableStateOf<EventDto?>(null)
+        private set
+
+    fun selectEvent(event: EventDto) { selectedEvent = event }
+    fun clearSelectedEvent() { selectedEvent = null }
+
     fun startEditEvent(event: EventDto) { editingEvent = event }
     fun cancelEditEvent() { editingEvent = null }
 
     fun updateEvent(id: String, name: String, date: String?, location: String?, notes: String?) {
+        updateEventFull(id, name, date, location, notes, null)
+    }
+
+    fun updateEventFull(id: String, name: String, date: String?, location: String?, notes: String?, description: String?) {
         viewModelScope.launch {
             runCatching {
                 val ev = api.updateEvent(id, CreateEventRequest(
                     name = name, eventDate = date, location = location,
-                    notes = notes, description = null
+                    notes = notes, description = description
                 ))
                 events = events.map { if (it.id == id) ev else it }
+                if (selectedEvent?.id == id) selectedEvent = ev
             }
             editingEvent = null
+        }
+    }
+
+    fun addBookingToEvent(eventId: String, bookingId: String) {
+        viewModelScope.launch {
+            runCatching { api.linkBookingToEvent(eventId, bookingId) }
+            val updated = runCatching { api.getEvent(eventId) }.getOrNull()
+            if (updated != null) {
+                events = events.map { if (it.id == eventId) updated else it }
+                if (selectedEvent?.id == eventId) selectedEvent = updated
+            }
+            runCatching { api.getBookings(page = 1, limit = 50) }.getOrNull()?.list?.let {
+                bookings = it
+            }
         }
     }
 
@@ -341,21 +368,29 @@ fun MySpaceScreen(
     }
 
     if (vm.showCreateEvent) {
-        CreateEventDialog(
+        EventFormSheet(
             onDismiss = { vm.showCreateEvent(false) },
-            onConfirm = { name, date, location, notes ->
-                vm.createEvent(name, date, location, notes)
+            onSave = { name, date, location, notes, description ->
+                vm.createEvent(name, date, location, notes, description)
             }
         )
     }
 
     vm.editingEvent?.let { event ->
-        EditEventDialog(
+        EventFormSheet(
             event     = event,
             onDismiss = vm::cancelEditEvent,
-            onConfirm = { name, date, location, notes ->
-                vm.updateEvent(event.id, name, date, location, notes)
+            onSave = { name, date, location, notes, description ->
+                vm.updateEventFull(event.id, name, date, location, notes, description)
             }
+        )
+    }
+
+    vm.selectedEvent?.let { event ->
+        EventDetailSheet(
+            event    = event,
+            vm       = vm,
+            onDismiss = vm::clearSelectedEvent
         )
     }
 
@@ -799,7 +834,8 @@ private fun EventsTab(vm: MySpaceViewModel) {
                     EventCard(
                         event    = event,
                         onDelete = { vm.deleteEvent(event.id) },
-                        onEdit   = { vm.startEditEvent(event) }
+                        onEdit   = { vm.startEditEvent(event) },
+                        onClick  = { vm.selectEvent(event) }
                     )
                 }
                 item { Spacer(Modifier.height(8.dp)) }
@@ -821,11 +857,11 @@ private fun EventsTab(vm: MySpaceViewModel) {
 }
 
 @Composable
-private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit = {}) {
+private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit = {}, onClick: () -> Unit = {}) {
     var showDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(2.dp)
@@ -1092,77 +1128,6 @@ private fun FavoriteCard(fav: FavoriteDto, artist: ArtistDto?, onClick: () -> Un
             }
         }
     }
-}
-
-// ─── Create Event Dialog ──────────────────────────────────────────────────────
-
-@Composable
-private fun CreateEventDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String?, String?, String?) -> Unit
-) {
-    var name     by remember { mutableStateOf("") }
-    var date     by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var notes    by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Nuevo evento", fontWeight = FontWeight.Bold) },
-        text  = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it },
-                    label = { Text("Nombre del evento *") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PiumsOrange,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
-                    )
-                )
-                OutlinedTextField(
-                    value = date, onValueChange = { date = it },
-                    label = { Text("Fecha (AAAA-MM-DD)") },
-                    placeholder = { Text("ej. 2026-05-20") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PiumsOrange,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
-                    )
-                )
-                OutlinedTextField(
-                    value = location, onValueChange = { location = it },
-                    label = { Text("Dirección") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PiumsOrange,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank()) onConfirm(
-                        name,
-                        date.takeIf { it.isNotBlank() },
-                        location.takeIf { it.isNotBlank() },
-                        notes.takeIf { it.isNotBlank() }
-                    )
-                },
-                enabled = name.isNotBlank()
-            ) {
-                Text("Crear", color = PiumsOrange, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
 }
 
 // ─── Review Dialog ────────────────────────────────────────────────────────────
