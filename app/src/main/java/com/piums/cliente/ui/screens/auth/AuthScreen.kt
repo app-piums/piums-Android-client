@@ -62,8 +62,6 @@ fun AuthScreen(
                 state      = state,
                 onLogin    = vm::login,
                 onGoogle   = { vm.loginWithGoogle(it) },
-                onFacebook = { vm.loginWithOAuth(it, "facebook") },
-                onTikTok   = { vm.loginWithOAuth(it, "tiktok") },
                 onForgot   = { flow = AuthFlow.FORGOT },
                 onRegister = { flow = AuthFlow.REGISTER }
             )
@@ -204,8 +202,6 @@ private fun LoginSheet(
     state: AuthUiState,
     onLogin: (String, String) -> Unit,
     onGoogle: (android.content.Context) -> Unit,
-    onFacebook: (android.content.Context) -> Unit,
-    onTikTok: (android.content.Context) -> Unit,
     onForgot: () -> Unit,
     onRegister: () -> Unit
 ) {
@@ -249,8 +245,6 @@ private fun LoginSheet(
                     isLoading  = state.isLoading,
                     onBack     = { step = LoginStep.EMAIL },
                     onGoogle   = { onGoogle(context) },
-                    onFacebook = { onFacebook(context) },
-                    onTikTok   = { onTikTok(context) },
                     onRegister = onRegister
                 )
             }
@@ -394,8 +388,6 @@ private fun SocialPanel(
     isLoading: Boolean,
     onBack: () -> Unit,
     onGoogle: () -> Unit,
-    onFacebook: () -> Unit,
-    onTikTok: () -> Unit,
     onRegister: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -415,20 +407,6 @@ private fun SocialPanel(
                 label   = "Continuar con Google",
                 enabled = !isLoading,
                 onClick = onGoogle
-            )
-            SocialButton(
-                icon    = { FacebookIcon() },
-                label   = "Continuar con Facebook",
-                badge   = "Próximamente",
-                enabled = false,
-                onClick = onFacebook
-            )
-            SocialButton(
-                icon    = { TikTokIcon() },
-                label   = "Continuar con TikTok",
-                badge   = "Próximamente",
-                enabled = false,
-                onClick = onTikTok
             )
         }
 
@@ -593,29 +571,6 @@ private fun GoogleIcon() {
         contentAlignment = Alignment.Center
     ) {
         Text("G", fontWeight = FontWeight.Bold, color = Color(0xFF4285F4), fontSize = 14.sp)
-    }
-}
-
-@Composable
-private fun FacebookIcon() {
-    Box(
-        modifier         = Modifier.size(26.dp).background(Color(0xFF1877F2), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("f", fontWeight = FontWeight.Black, color = Color.White, fontSize = 15.sp)
-    }
-}
-
-@Composable
-private fun TikTokIcon() {
-    Box(
-        modifier         = Modifier.size(26.dp).background(Color.Black, RoundedCornerShape(6.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            Icons.Default.MusicNote, contentDescription = null,
-            tint = Color.White, modifier = Modifier.size(14.dp)
-        )
     }
 }
 

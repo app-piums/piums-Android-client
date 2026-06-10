@@ -5,7 +5,6 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.piums.cliente.data.local.TokenStorage
 import com.piums.cliente.data.remote.PiumsApiService
 import com.piums.cliente.data.remote.dto.*
-import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,23 +37,6 @@ class AuthRepository @Inject constructor(
             }
         }
         resp.user ?: error("No user in response")
-    }
-
-    suspend fun loginWithOAuth(jwt: String): Result<UserDto> = runCatching {
-        tokenStorage.accessToken = jwt
-        // OAuth JWTs don't have a refreshToken — call getMe to verify and populate profile.
-        // Network/server errors don't fail the login; only a 401 does (per iOS behavior).
-        val user = runCatching { api.getMe().toUserDto() }.getOrElse { e ->
-            if (e is HttpException && e.code() == 401) throw e
-            null
-        }
-        user?.let {
-            tokenStorage.userId    = it.id
-            tokenStorage.userName  = it.nombre
-            tokenStorage.userEmail = it.email
-            tokenStorage.avatarUrl = it.avatar
-        }
-        user ?: UserDto(id = "", email = "", nombre = null, role = "cliente", avatar = null, isVerified = null)
     }
 
     suspend fun forgotPassword(email: String): Result<Unit> = runCatching {

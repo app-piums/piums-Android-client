@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.piums.cliente.data.auth.GoogleSignInCancelled
 import com.piums.cliente.data.auth.GoogleSignInHelper
 import com.piums.cliente.data.auth.GoogleSignInNoCredential
-import com.piums.cliente.data.auth.OAuthWebLoginHelper
 import com.piums.cliente.data.repository.AuthRepository
 import com.piums.cliente.utils.LoginRateLimiter
 import com.piums.cliente.utils.toUserMessage
@@ -29,7 +28,6 @@ data class AuthUiState(
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val googleSignInHelper: GoogleSignInHelper,
-    private val oAuthWebLoginHelper: OAuthWebLoginHelper,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -83,23 +81,6 @@ class AuthViewModel @Inject constructor(
             }
 
             authRepository.loginWithGoogle(firebaseIdToken)
-                .onSuccess { _state.update { it.copy(isLoading = false, success = true) } }
-                .onFailure { e -> _state.update { it.copy(isLoading = false, error = e.toUserMessage()) } }
-        }
-    }
-
-    fun loginWithOAuth(context: Context, provider: String) {
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
-
-            val jwt = runCatching {
-                oAuthWebLoginHelper.login(context, provider)
-            }.getOrElse { e ->
-                _state.update { it.copy(isLoading = false, error = e.toUserMessage()) }
-                return@launch
-            }
-
-            authRepository.loginWithOAuth(jwt)
                 .onSuccess { _state.update { it.copy(isLoading = false, success = true) } }
                 .onFailure { e -> _state.update { it.copy(isLoading = false, error = e.toUserMessage()) } }
         }
