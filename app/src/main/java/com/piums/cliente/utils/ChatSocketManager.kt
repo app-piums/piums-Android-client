@@ -51,6 +51,8 @@ class ChatSocketManager @Inject constructor(
 
         val options = IO.Options().apply {
             auth = mapOf("token" to token)
+            path = "/socket.io/"
+            transports = arrayOf("polling", "websocket")
             reconnection = true
             reconnectionAttempts = 10
             reconnectionDelay = 3000L
@@ -143,6 +145,6 @@ class ChatSocketManager @Inject constructor(
     }
 
     companion object {
-        private const val SOCKET_URL = "https://client.piums.io"
+        private const val SOCKET_URL = "https://backend.piums.io"
     }
 }
