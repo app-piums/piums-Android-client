@@ -73,7 +73,7 @@ class TourManager @Inject constructor() {
                 icon = Icons.Default.Message,
                 color = Color(0xFF3B82F6),
                 title = "Mensajes",
-                description = "Comunícate directamente con los artistas. Las conversaciones con mensajes no leídos muestran un badge en el ícono.",
+                description = "Comunícate directamente con los artistas en tiempo real. Sabrás cuando el artista está escribiendo. Las conversaciones no leídas muestran un badge.",
                 tip = "Escribe antes del evento para coordinar los detalles finales sin sorpresas."
             ),
             TourStep(

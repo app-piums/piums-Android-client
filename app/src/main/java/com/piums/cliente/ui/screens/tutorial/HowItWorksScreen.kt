@@ -29,14 +29,11 @@ private data class HowItWorksFeature(
 )
 
 private val FEATURES = listOf(
-    HowItWorksFeature(Icons.Default.Home,          "Panel principal",   Color(0xFFFF6A00), 0),
-    HowItWorksFeature(Icons.Default.CalendarMonth, "Reservas",          Color(0xFFF59E0B), 2),
-    HowItWorksFeature(Icons.Default.LocationOn,    "Buscar por fecha",  Color(0xFF10B981), 1),
-    HowItWorksFeature(Icons.Default.Search,        "Explorar artistas", Color(0xFF6366F1), 1),
-    HowItWorksFeature(Icons.Default.AutoAwesome,   "Eventos",           Color(0xFFEC4899), 2),
-    HowItWorksFeature(Icons.Default.Favorite,      "Favoritos",         Color(0xFFEF4444), 2),
-    HowItWorksFeature(Icons.Default.Message,       "Mensajes",          Color(0xFF3B82F6), 3),
-    HowItWorksFeature(Icons.Default.Settings,      "Configuración",     Color(0xFF8B5CF6), 4),
+    HowItWorksFeature(Icons.Default.Home,     "Inicio",     Color(0xFFFF6A00), 0),
+    HowItWorksFeature(Icons.Default.Search,   "Explorar",   Color(0xFF6366F1), 1),
+    HowItWorksFeature(Icons.Default.GridView, "Mi Espacio", Color(0xFFEC4899), 2),
+    HowItWorksFeature(Icons.Default.Message,  "Mensajes",   Color(0xFF3B82F6), 3),
+    HowItWorksFeature(Icons.Default.Person,   "Perfil",     Color(0xFF8B5CF6), 4),
 )
 
 @Composable
