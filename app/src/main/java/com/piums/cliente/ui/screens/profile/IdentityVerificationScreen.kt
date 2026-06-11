@@ -77,10 +77,9 @@ class IdentityVerificationViewModel @Inject constructor(
                 "selfie"    -> isUploadingSelfie = true
             }
             runCatching {
-                val bytes = context.contentResolver.openInputStream(uri)?.readBytes()
-                    ?: error("No se pudo leer la imagen")
-                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+                // Comprimir a JPEG: el backend solo acepta JPG/PNG/WebP y máximo 5MB
+                val bytes = com.piums.cliente.utils.ImageUtils.compressedJpeg(context, uri)
+                val body = bytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
                 val part = MultipartBody.Part.createFormData("file", "document.jpg", body)
                 api.uploadDocument(folder = folder, file = part)
                 when (folder) {

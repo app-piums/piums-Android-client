@@ -99,6 +99,8 @@ class ProfileViewModel @Inject constructor(
     var isDarkMode by mutableStateOf(themeManager.forcedDark)
         private set
     var avatarUrl by mutableStateOf(tokenStorage.avatarUrl)
+
+    var avatarError by mutableStateOf<String?>(null)
         private set
     var isUploadingAvatar by mutableStateOf(false)
         private set
@@ -122,16 +124,19 @@ class ProfileViewModel @Inject constructor(
     fun uploadAvatar(context: Context, uri: Uri) {
         viewModelScope.launch {
             isUploadingAvatar = true
+            avatarError = null
             runCatching {
-                val bytes = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@launch
-                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                val requestBody = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+                // Comprimir a JPEG: el backend solo acepta JPG/PNG/WebP y máximo 5MB
+                val bytes = com.piums.cliente.utils.ImageUtils.compressedJpeg(context, uri, maxPx = 800, quality = 70)
+                val requestBody = bytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
                 val part = MultipartBody.Part.createFormData("avatar", "avatar.jpg", requestBody)
                 val resp = api.uploadAvatar(part)
                 resp.url?.let {
                     tokenStorage.avatarUrl = it
                     avatarUrl = it
-                }
+                } ?: error("La respuesta no incluyó la URL del avatar")
+            }.onFailure {
+                avatarError = "No se pudo subir la foto. Intenta de nuevo."
             }
             isUploadingAvatar = false
         }
@@ -353,6 +358,12 @@ fun ProfileScreen(
                         Icon(Icons.Default.CameraAlt, null,
                             tint = Color.White, modifier = Modifier.size(13.dp))
                     }
+                }
+
+                vm.avatarError?.let { err ->
+                    Text(err,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
                 }
 
                 Text(vm.userName.ifBlank { "Usuario" },
