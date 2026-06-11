@@ -213,13 +213,13 @@ interface PiumsApiService {
     suspend fun getEvents(): EventsResponse
 
     @POST("api/events")
-    suspend fun createEvent(@Body body: CreateEventRequest): EventDto
+    suspend fun createEvent(@Body body: CreateEventRequest): SingleEventResponse
 
     @GET("api/events/{id}")
-    suspend fun getEvent(@Path("id") id: String): EventDto
+    suspend fun getEvent(@Path("id") id: String): SingleEventResponse
 
     @PATCH("api/events/{id}")
-    suspend fun updateEvent(@Path("id") id: String, @Body body: CreateEventRequest): EventDto
+    suspend fun updateEvent(@Path("id") id: String, @Body body: CreateEventRequest): SingleEventResponse
 
     @DELETE("api/events/{id}")
     suspend fun deleteEvent(@Path("id") id: String)

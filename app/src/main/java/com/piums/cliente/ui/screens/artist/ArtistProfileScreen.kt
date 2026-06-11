@@ -730,7 +730,7 @@ private fun ServiceCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(service.name,
+                        Text(service.name ?: "",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface)
@@ -971,7 +971,7 @@ private fun CertificationsSection(certs: List<CertificationDto>) {
                     modifier = Modifier.size(28.dp)
                 )
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(cert.name, style = MaterialTheme.typography.bodyMedium,
+                    Text(cert.name ?: "", style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold)
                     val meta = listOfNotNull(cert.issuer, cert.issueYear)
                         .joinToString(" · ")
@@ -1175,7 +1175,7 @@ private fun ServiceDetailSheet(
                 }
                 Column(modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(service.name, style = MaterialTheme.typography.titleSmall,
+                    Text(service.name ?: "", style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold)
                     service.description?.takeIf { it.isNotBlank() }?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall,
@@ -1370,10 +1370,10 @@ private fun WriteReviewSheet(
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Column {
-                                        Text(booking.resolvedArtistName ?: artistName,
+                                        Text(booking.resolvedArtistName ?: artistName ?: "",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold)
-                                        Text(booking.scheduledDate.take(10),
+                                        Text((booking.scheduledDate ?: "").take(10),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                                     }

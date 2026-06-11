@@ -135,6 +135,11 @@ data class EventsResponse(
     val list: List<EventDto> get() = events ?: data ?: emptyList()
 }
 
+data class SingleEventResponse(
+    val success: Boolean? = null,
+    val data: EventDto? = null
+)
+
 data class CreateEventRequest(
     val name: String,
     val eventDate: String?,
@@ -292,7 +297,7 @@ data class TilopayCallbackParams(
     val currency: String?,
     val orderHash: String?
 ) {
-    val isApproved: Boolean get() = responseCode == "00"
+    val isApproved: Boolean get() = responseCode == "00" || responseCode == "1"
 }
 
 data class TilopayConfirmRequest(

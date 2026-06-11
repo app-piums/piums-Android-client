@@ -738,11 +738,11 @@ private fun TilopayWebSheet(
                                 val result = TilopayCallbackParams(
                                     bookingId    = bid,
                                     responseCode = params["responseCode"] ?: params["code"] ?: "",
-                                    orderNumber  = params["orderNumber"]  ?: params["tpt"]  ?: "",
+                                    orderNumber  = params["orderNumber"]  ?: params["tpt"]  ?: params["order"] ?: "",
                                     amount       = params["amount"]       ?: "",
                                     auth         = params["auth"],
                                     currency     = params["currency"],
-                                    orderHash    = params["orderHash"]
+                                    orderHash    = params["orderHash"]    ?: params["OrderHash"]
                                 )
                                 onCallback(result)
                                 return true

@@ -233,13 +233,13 @@ class MySpaceViewModel @Inject constructor(
 
     fun createEvent(name: String, date: String?, location: String?, notes: String?, description: String? = null) {
         viewModelScope.launch {
-            runCatching {
-                val ev = api.createEvent(CreateEventRequest(
+            val ev = runCatching {
+                api.createEvent(CreateEventRequest(
                     name = name, eventDate = date, location = location,
                     notes = notes, description = description
                 ))
-                events = listOf(ev) + events
-            }
+            }.getOrNull()?.data
+            if (ev != null) events = listOf(ev) + events
             showCreateEvent = false
         }
     }
@@ -270,11 +270,13 @@ class MySpaceViewModel @Inject constructor(
 
     fun updateEventFull(id: String, name: String, date: String?, location: String?, notes: String?, description: String?) {
         viewModelScope.launch {
-            runCatching {
-                val ev = api.updateEvent(id, CreateEventRequest(
+            val ev = runCatching {
+                api.updateEvent(id, CreateEventRequest(
                     name = name, eventDate = date, location = location,
                     notes = notes, description = description
                 ))
+            }.getOrNull()?.data
+            if (ev != null) {
                 events = events.map { if (it.id == id) ev else it }
                 if (selectedEvent?.id == id) selectedEvent = ev
             }
@@ -285,7 +287,7 @@ class MySpaceViewModel @Inject constructor(
     fun addBookingToEvent(eventId: String, bookingId: String) {
         viewModelScope.launch {
             runCatching { api.linkBookingToEvent(eventId, bookingId) }
-            val updated = runCatching { api.getEvent(eventId) }.getOrNull()
+            val updated = runCatching { api.getEvent(eventId) }.getOrNull()?.data
             if (updated != null) {
                 events = events.map { if (it.id == eventId) updated else it }
                 if (selectedEvent?.id == eventId) selectedEvent = updated

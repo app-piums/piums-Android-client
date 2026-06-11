@@ -369,9 +369,10 @@ class BookingViewModel @Inject constructor(
 
     fun createEvent(name: String, date: String?, location: String?, notes: String?, description: String? = null) {
         viewModelScope.launch {
-            val newEvent = runCatching {
+            val result = runCatching {
                 api.createEvent(CreateEventRequest(name = name, eventDate = date, location = location, notes = notes, description = description))
-            }.getOrNull()
+            }
+            val newEvent = result.getOrNull()?.data
             if (newEvent != null) {
                 userEvents = listOf(newEvent) + userEvents
                 selectedEventId = newEvent.id
@@ -733,7 +734,7 @@ private fun ServiceCard(svc: ArtistServiceDto, selected: Boolean, onClick: () ->
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(svc.name, fontWeight = FontWeight.SemiBold,
+                Text(svc.name ?: "", fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface)
                 svc.description?.takeIf { it.isNotBlank() }?.let {
@@ -1422,7 +1423,7 @@ private fun ConfirmStep(vm: BookingViewModel) {
                                             Icon(Icons.Default.DirectionsCar, null,
                                                 tint = PiumsOrange, modifier = Modifier.size(16.dp))
                                         }
-                                        Text(item.name,
+                                        Text(item.name ?: "",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = if (isTravel) PiumsOrange
                                                     else MaterialTheme.colorScheme.onSurface.copy(0.7f),
@@ -2002,7 +2003,7 @@ private fun EventPickerRow(
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(event.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(event.name ?: "", style = MaterialTheme.typography.bodyMedium)
                             event.eventDate?.take(10)?.let {
                                 Text(it, style = MaterialTheme.typography.labelSmall, color = PiumsOrange)
                             }
