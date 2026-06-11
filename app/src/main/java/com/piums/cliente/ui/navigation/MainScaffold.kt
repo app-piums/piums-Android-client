@@ -83,6 +83,10 @@ fun MainScaffold(
     val backStack by innerNav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val isTabRoute = currentRoute in TAB_ROUTES
+    var isChatOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != Tab.INBOX.route) isChatOpen = false
+    }
 
     val tourStep by mainVm.tourManager.currentStep.collectAsState()
     val context  = LocalContext.current
@@ -191,9 +195,10 @@ fun MainScaffold(
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
+            contentWindowInsets = if (isChatOpen) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
             bottomBar = {
                 AnimatedVisibility(
-                    visible = isTabRoute,
+                    visible = isTabRoute && !isChatOpen,
                     enter = slideInVertically { it },
                     exit  = slideOutVertically { it }
                 ) {
@@ -283,7 +288,8 @@ fun MainScaffold(
                 composable(Tab.INBOX.route) {
                     InboxScreen(
                         onUnreadChanged = { mainVm.loadUnreadCount() },
-                        onDisputeClick  = { id -> innerNav.navigate("dispute/$id") }
+                        onDisputeClick  = { id -> innerNav.navigate("dispute/$id") },
+                        onChatOpen      = { open -> isChatOpen = open }
                     )
                 }
                 composable(Tab.PROFILE.route) {

@@ -205,6 +205,7 @@ class InboxViewModel @Inject constructor(
 fun InboxScreen(
     onUnreadChanged: () -> Unit = {},
     onDisputeClick: (String) -> Unit = {},
+    onChatOpen: (Boolean) -> Unit = {},
     vm: InboxViewModel = hiltViewModel()
 ) {
     val isSocketConnected by vm.socketManager.isConnected.collectAsState()
@@ -220,6 +221,7 @@ fun InboxScreen(
     }
 
     val active = vm.activeConversation
+    LaunchedEffect(active != null) { onChatOpen(active != null) }
     if (active != null) {
         ChatScreen(
             conversation    = active,
@@ -447,7 +449,7 @@ internal fun ChatScreen(
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         // Top bar
         Row(
             modifier = Modifier
@@ -515,7 +517,6 @@ internal fun ChatScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -569,7 +570,7 @@ internal fun MessageBubble(message: ChatMessageDto, isOwn: Boolean) {
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    message.content,
+                    message.content ?: "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isOwn) Color.White else MaterialTheme.colorScheme.onSurface
                 )
@@ -807,7 +808,8 @@ private fun InboxEmpty(icon: androidx.compose.ui.graphics.vector.ImageVector, me
     }
 }
 
-private fun formatMessageTime(isoStr: String): String {
+private fun formatMessageTime(isoStr: String?): String {
+    if (isoStr.isNullOrBlank()) return ""
     return try {
         val instant = Instant.parse(isoStr)
         DateTimeFormatter.ofPattern("HH:mm")
