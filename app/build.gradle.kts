@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,6 +10,10 @@ plugins {
 }
 
 layout.buildDirectory.set(File("/Users/piums/gradle-builds/PiumsClienteAndroid/app"))
+
+val localProps = Properties().also { p ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(p::load)
+}
 
 android {
     namespace = "com.piums.cliente"
@@ -22,12 +28,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile     = file(localProps.getProperty("RELEASE_STORE_FILE"))
+            keyAlias      = localProps.getProperty("RELEASE_KEY_ALIAS")
+            storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD")
+            keyPassword   = localProps.getProperty("RELEASE_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "BASE_URL", "\"https://client.piums.io/\"")
         }
         release {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
