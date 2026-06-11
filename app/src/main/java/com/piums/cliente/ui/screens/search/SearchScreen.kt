@@ -233,6 +233,7 @@ private val CATEGORIES = listOf(
     Category("Fotografía", Icons.Default.CameraAlt,   "FOTOGRAFO"),
     Category("Video",      Icons.Default.Videocam,    "VIDEOGRAFO"),
     Category("Animador",   Icons.Default.Celebration, "ANIMADOR"),
+    Category("Creadores",  Icons.Default.PlayCircle,  "CREADOR_CONTENIDO"),
 )
 
 private val POPULAR_SEARCHES = listOf(
@@ -243,7 +244,8 @@ private val SPECIALTY_DISPLAY = mapOf(
     "MUSICO"     to "Música",
     "FOTOGRAFO"  to "Fotografía",
     "VIDEOGRAFO" to "Video",
-    "ANIMADOR"   to "Animador"
+    "ANIMADOR"   to "Animador",
+    "CREADOR_CONTENIDO" to "Creadores"
 )
 
 private data class SortOption(val sortBy: String, val sortOrder: String?, val label: String)
@@ -959,12 +961,12 @@ private fun FilterSheet(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
                     }
-                    Slider(value = minPrice, onValueChange = { minPrice = it.coerceAtMost(maxPrice - 500f) },
-                        valueRange = 0f..49000f, steps = 97,
-                        colors = SliderDefaults.colors(thumbColor = PiumsOrange, activeTrackColor = PiumsOrange))
-                    Slider(value = maxPrice, onValueChange = { maxPrice = it.coerceAtLeast(minPrice + 500f) },
-                        valueRange = 1000f..50000f, steps = 97,
-                        colors = SliderDefaults.colors(thumbColor = PiumsOrange, activeTrackColor = PiumsOrange))
+                    RangeSlider(
+                        value = minPrice..maxPrice,
+                        onValueChange = { minPrice = it.start; maxPrice = it.endInclusive },
+                        valueRange = 0f..50000f, steps = 499,
+                        colors = SliderDefaults.colors(thumbColor = PiumsOrange, activeTrackColor = PiumsOrange)
+                    )
                 }
             }
 

@@ -148,14 +148,7 @@ class ArtistSearchByDateViewModel @Inject constructor(
                     val specs = item.artist.specialties?.joinToString(" ")?.lowercase() ?: ""
                     if (!specs.contains(selectedSpecialty!!.lowercase())) return@filter false
                 }
-                if (minPrice > 0) {
-                    val price = item.mainServicePrice ?: return@filter false
-                    if (price < minPrice.toInt()) return@filter false
-                }
-                if (maxPrice < 50000) {
-                    val price = item.mainServicePrice ?: return@filter true
-                    if (price > maxPrice.toInt()) return@filter false
-                }
+                // El rango de precio ya no excluye: ordena por cercanía al presupuesto (abajo)
                 if (minRating > 0) {
                     val rating = item.artist.averageRating ?: return@filter false
                     if (rating < minRating) return@filter false
@@ -171,7 +164,22 @@ class ArtistSearchByDateViewModel @Inject constructor(
                 ByDateSortOption.RATING_DESC  -> result.sortedByDescending { it.artist.averageRating ?: 0.0 }
                 ByDateSortOption.PRICE_ASC    -> result.sortedBy { it.mainServicePrice ?: Int.MAX_VALUE }
                 ByDateSortOption.PRICE_DESC   -> result.sortedByDescending { it.mainServicePrice ?: 0 }
-                ByDateSortOption.RELEVANCE    -> result
+                ByDateSortOption.RELEVANCE    -> {
+                    // Con rango de precio activo: dentro del rango primero (más
+                    // cercano al máximo), luego fuera por distancia, sin precio al final.
+                    if (minPrice > 0 || maxPrice < 50000) {
+                        val lo = minPrice.toInt()
+                        val hi = if (maxPrice < 50000) maxPrice.toInt() else Int.MAX_VALUE
+                        fun tier(p: Int?) = when { p == null -> 2; p in lo..hi -> 0; else -> 1 }
+                        fun key(p: Int?): Int = when {
+                            p == null -> 0
+                            p in lo..hi -> if (hi == Int.MAX_VALUE) p - lo else -p
+                            p > hi -> p - hi
+                            else -> lo - p
+                        }
+                        result.sortedWith(compareBy({ tier(it.mainServicePrice) }, { key(it.mainServicePrice) }))
+                    } else result
+                }
             }
             return result
         }
@@ -667,13 +675,13 @@ private fun SearchByDateFiltersSheet(
             FilterSection(title = "Rango de precio") {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Q${vm.minPrice.toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
-                        Text(if (vm.maxPrice >= 50000) "Sin límite" else "Q${vm.maxPrice.toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
+                        Text("Mínimo: Q${(vm.minPrice / 100).toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
+                        Text(if (vm.maxPrice >= 50000) "Máximo: Sin límite" else "Máximo: Q${(vm.maxPrice / 100).toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
                     }
                     RangeSlider(
                         value = vm.minPrice..vm.maxPrice,
                         onValueChange = { vm.minPrice = it.start; vm.maxPrice = it.endInclusive },
-                        valueRange = 0f..50000f,
+                        valueRange = 0f..50000f, steps = 499,
                         colors = SliderDefaults.colors(activeTrackColor = PiumsOrange, thumbColor = PiumsOrange)
                     )
                 }

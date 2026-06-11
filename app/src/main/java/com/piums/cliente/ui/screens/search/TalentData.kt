@@ -119,8 +119,8 @@ val TALENT_GROUPS = listOf(
             Talent("storyteller", "Storyteller",   "ESCRITOR"),
         )),
         TalentSubCategory("social_media", "Social Media", listOf(
-            Talent("creador_contenido", "Creador de Contenido", "OTRO"),
-            Talent("tiktoker",          "TikToker / Reels",     "OTRO"),
+            Talent("creador_contenido", "Creador de Contenido", "CREADOR_CONTENIDO"),
+            Talent("tiktoker",          "TikToker / Reels",     "CREADOR_CONTENIDO"),
             Talent("youtuber",          "YouTuber",             "VIDEOGRAFO"),
         )),
     )),

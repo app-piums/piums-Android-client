@@ -675,6 +675,8 @@ private fun specialtyGradient(specialties: List<String>?): Brush {
             listOf(Color(0xFF06B6D4), Color(0xFF10B981))
         "mag" in s ->
             listOf(Color(0xFF7C3AED), Color(0xFF4F46E5))
+        "creador" in s || "contenido" in s ->
+            listOf(Color(0xFF06B6D4), Color(0xFF0EA5E9))
         else ->
             listOf(Color(0xFFFF6A00), Color(0xFF00AEEF))
     }
