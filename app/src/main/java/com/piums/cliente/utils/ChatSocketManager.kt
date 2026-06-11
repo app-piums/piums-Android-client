@@ -1,5 +1,6 @@
 package com.piums.cliente.utils
 
+import android.util.Log
 import com.piums.cliente.data.local.TokenStorage
 import com.piums.cliente.data.remote.dto.ChatMessageDto
 import dagger.hilt.android.scopes.ActivityRetainedScoped
@@ -35,6 +36,9 @@ class ChatSocketManager @Inject constructor(
     private val _unreadCount = MutableStateFlow(0)
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
 
+    private val _typingConversationId = MutableStateFlow<String?>(null)
+    val typingConversationId: StateFlow<String?> = _typingConversationId.asStateFlow()
+
     private val _pendingDeepLinkConversationId = MutableStateFlow<String?>(null)
     val pendingDeepLinkConversationId: StateFlow<String?> = _pendingDeepLinkConversationId.asStateFlow()
 
@@ -69,7 +73,19 @@ class ChatSocketManager @Inject constructor(
             s.on(Socket.EVENT_CONNECT_ERROR) { /* reconnection handled automatically */ }
 
             s.on("message:received") { args ->
-                parseMessage(args)?.let { _incomingMessages.tryEmit(it) }
+                val result = parseMessage(args)
+                if (result != null) {
+                    _incomingMessages.tryEmit(result)
+                } else {
+                    Log.w("ChatSocket", "message:received parse failed: ${args.firstOrNull()}")
+                }
+            }
+            s.on("typing:start") { args ->
+                val obj = args.firstOrNull() as? JSONObject ?: return@on
+                _typingConversationId.value = obj.optString("conversationId").takeIf { it.isNotEmpty() }
+            }
+            s.on("typing:stop") { _ ->
+                _typingConversationId.value = null
             }
             s.on("message:read") { /* mark read handled via REST */ }
             s.on("unread:count") { args ->
@@ -103,19 +119,27 @@ class ChatSocketManager @Inject constructor(
         socket?.emit("conversation:read", JSONObject().put("conversationId", conversationId))
     }
 
+    fun emitTypingStart(conversationId: String) {
+        socket?.emit("typing:start", JSONObject().put("conversationId", conversationId))
+    }
+
+    fun emitTypingStop(conversationId: String) {
+        socket?.emit("typing:stop", JSONObject().put("conversationId", conversationId))
+    }
+
     private fun parseMessage(args: Array<Any>): ChatMessageDto? {
         val obj = args.firstOrNull() as? JSONObject ?: return null
         val msg = if (obj.has("message")) obj.optJSONObject("message") ?: obj else obj
-        return runCatching {
-            ChatMessageDto(
-                id             = msg.getString("id"),
-                conversationId = msg.getString("conversationId"),
-                senderId       = msg.getString("senderId"),
-                content        = msg.getString("content"),
-                status         = msg.optString("status", "SENT"),
-                createdAt      = msg.optString("createdAt", "")
-            )
-        }.getOrNull()
+        val id = msg.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val convId = msg.optString("conversationId").takeIf { it.isNotEmpty() } ?: return null
+        return ChatMessageDto(
+            id             = id,
+            conversationId = convId,
+            senderId       = msg.optString("senderId"),
+            content        = msg.optString("content"),
+            status         = msg.optString("status", "SENT"),
+            createdAt      = msg.optString("createdAt", "")
+        )
     }
 
     companion object {

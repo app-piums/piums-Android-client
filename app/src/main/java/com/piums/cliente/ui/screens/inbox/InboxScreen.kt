@@ -39,7 +39,10 @@ import com.piums.cliente.ui.components.SegmentedTab
 import com.piums.cliente.ui.theme.PiumsOrange
 import com.piums.cliente.utils.ChatSocketManager
 import android.util.Log
+import androidx.compose.animation.core.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -71,6 +74,8 @@ class InboxViewModel @Inject constructor(
         private set
     var isSending by mutableStateOf(false)
         private set
+    var isOtherTyping by mutableStateOf(false)
+        private set
 
     var disputes by mutableStateOf<List<DisputeDto>>(emptyList())
         private set
@@ -89,6 +94,11 @@ class InboxViewModel @Inject constructor(
                     messages.none { it.id == incoming.id }) {
                     messages = messages + incoming
                 }
+            }
+        }
+        viewModelScope.launch {
+            socketManager.typingConversationId.collect { convId ->
+                isOtherTyping = convId != null && convId == activeConversation?.id
             }
         }
         // Re-fetch messages after reconnect to recover any missed during disconnect
@@ -143,18 +153,40 @@ class InboxViewModel @Inject constructor(
     }
 
     fun closeConversation() {
-        activeConversation?.let { socketManager.leaveConversation(it.id) }
+        typingJob?.cancel()
+        activeConversation?.let {
+            socketManager.emitTypingStop(it.id)
+            socketManager.leaveConversation(it.id)
+        }
         activeConversation = null
         messages = emptyList()
         messageInput = ""
+        isOtherTyping = false
     }
 
-    fun onInputChange(text: String) { messageInput = text }
+    private var typingJob: Job? = null
+
+    fun onInputChange(text: String) {
+        messageInput = text
+        val convId = activeConversation?.id ?: return
+        typingJob?.cancel()
+        if (text.isNotBlank()) {
+            socketManager.emitTypingStart(convId)
+            typingJob = viewModelScope.launch {
+                delay(1500)
+                socketManager.emitTypingStop(convId)
+            }
+        } else {
+            socketManager.emitTypingStop(convId)
+        }
+    }
 
     fun sendMessage() {
         val conv = activeConversation ?: return
         val text = messageInput.trim()
         if (text.isBlank()) return
+        typingJob?.cancel()
+        socketManager.emitTypingStop(conv.id)
         messageInput = ""
         viewModelScope.launch {
             isSending = true
@@ -231,6 +263,7 @@ fun InboxScreen(
             myUserId        = vm.tokenStorage.userId ?: "",
             input           = vm.messageInput,
             isSocketOnline  = isSocketConnected,
+            isOtherTyping   = vm.isOtherTyping,
             onInputChange   = vm::onInputChange,
             onSend          = vm::sendMessage,
             onBack          = {
@@ -439,6 +472,7 @@ internal fun ChatScreen(
     myUserId: String,
     input: String,
     isSocketOnline: Boolean = false,
+    isOtherTyping: Boolean = false,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onBack: () -> Unit
@@ -510,6 +544,13 @@ internal fun ChatScreen(
                         MessageBubble(message = msg, isOwn = msg.senderId == myUserId)
                     }
                 }
+                if (isOtherTyping) {
+                    TypingIndicator(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
             }
         }
 
@@ -547,6 +588,44 @@ internal fun ChatScreen(
                     modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 else Icon(Icons.Default.Send, null)
             }
+        }
+    }
+}
+
+@Composable
+private fun TypingIndicator(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+    val delays = listOf(0, 150, 300)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        delays.forEach { delayMs ->
+            val offsetY by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = -6f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0f at delayMs using LinearEasing
+                        -6f at (delayMs + 200) using LinearEasing
+                        0f at (delayMs + 400) using LinearEasing
+                        0f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "dot$delayMs"
+            )
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .offset(y = offsetY.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(0.4f))
+            )
         }
     }
 }
