@@ -218,7 +218,7 @@ internal fun CouponCard(coupon: CouponDto) {
                                 Icon(Icons.Default.ArrowUpward, null,
                                     modifier = Modifier.size(10.dp),
                                     tint = MaterialTheme.colorScheme.onSurface.copy(0.4f))
-                                Text("Mín. Q${String.format("%.0f", min)}",
+                                Text("Mín. $${String.format("%.0f", min)}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(0.45f))
                             }

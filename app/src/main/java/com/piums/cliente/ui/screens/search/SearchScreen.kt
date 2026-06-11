@@ -953,11 +953,11 @@ private fun FilterSheet(
             FilterSection(title = "Rango de precio") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Mínimo: Q${(minPrice / 100).toInt()}",
+                        Text("Mínimo: $${(minPrice / 100).toInt()}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
                         Text(if (maxPrice >= 50000) "Máximo: Sin límite"
-                             else "Máximo: Q${(maxPrice / 100).toInt()}",
+                             else "Máximo: $${(maxPrice / 100).toInt()}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
                     }

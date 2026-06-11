@@ -675,8 +675,8 @@ private fun SearchByDateFiltersSheet(
             FilterSection(title = "Rango de precio") {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Mínimo: Q${(vm.minPrice / 100).toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
-                        Text(if (vm.maxPrice >= 50000) "Máximo: Sin límite" else "Máximo: Q${(vm.maxPrice / 100).toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
+                        Text("Mínimo: $${(vm.minPrice / 100).toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
+                        Text(if (vm.maxPrice >= 50000) "Máximo: Sin límite" else "Máximo: $${(vm.maxPrice / 100).toInt()}", style = MaterialTheme.typography.bodySmall, color = PiumsOrange)
                     }
                     RangeSlider(
                         value = vm.minPrice..vm.maxPrice,

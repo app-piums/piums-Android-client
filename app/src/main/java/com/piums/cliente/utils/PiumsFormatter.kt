@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 
 object Format {
 
-    fun price(cents: Int): String = "Q${String.format("%,.2f", cents / 100.0)}"
+    fun price(cents: Int): String = "$${String.format("%,.2f", cents / 100.0)}"
 
     fun date(iso: String?): String {
         if (iso.isNullOrBlank()) return ""

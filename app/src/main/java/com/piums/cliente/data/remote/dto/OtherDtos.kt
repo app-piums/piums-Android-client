@@ -125,7 +125,7 @@ data class EventDto(
     val bookings: List<BookingDto>?
 ) {
     val totalCents: Int get() = bookings?.sumOf { it.totalPrice } ?: 0
-    val formattedTotal: String get() = "Q${String.format("%,.2f", totalCents / 100.0)}"
+    val formattedTotal: String get() = "$${String.format("%,.2f", totalCents / 100.0)}"
 }
 
 data class EventsResponse(

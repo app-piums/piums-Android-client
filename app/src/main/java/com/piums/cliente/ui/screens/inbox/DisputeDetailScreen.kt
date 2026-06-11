@@ -352,7 +352,7 @@ private fun ResolutionCard(resolution: String, refundAmount: Int?) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Default.CreditCard, null,
                         tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
-                    Text("Reembolso: Q${String.format("%.2f", refundAmount / 100.0)}",
+                    Text("Reembolso: $${String.format("%.2f", refundAmount / 100.0)}",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold, color = Color(0xFF4CAF50))
                 }
