@@ -36,6 +36,7 @@ import com.piums.cliente.data.remote.dto.ArtistDto
 import com.piums.cliente.data.remote.dto.BookingDto
 import com.piums.cliente.notifications.NotificationsStore
 import com.piums.cliente.ui.components.EventLocationPickerSheet
+import com.piums.cliente.ui.components.MonthYearPickerDialog
 import com.piums.cliente.ui.theme.PiumsOrange
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -373,6 +374,7 @@ private fun MonthlyCalendar(
     onDayClick: ((LocalDate) -> Unit)? = null
 ) {
     var displayMonth by remember { mutableStateOf(YearMonth.from(today)) }
+    var showMonthPicker by remember { mutableStateOf(false) }
     val formatter = DateTimeFormatter.ISO_LOCAL_DATE
 
     // Cells: Monday-aligned grid, nulls for padding before day 1
@@ -405,13 +407,25 @@ private fun MonthlyCalendar(
                     tint = MaterialTheme.colorScheme.onSurface.copy(0.6f),
                     modifier = Modifier.size(20.dp))
             }
-            Text(
-                text = displayMonth.month.getDisplayName(TextStyle.FULL, ES_LOCALE)
-                    .replaceFirstChar { it.uppercase() } + " ${displayMonth.year}",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showMonthPicker = true }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = displayMonth.month.getDisplayName(TextStyle.FULL, ES_LOCALE)
+                        .replaceFirstChar { it.uppercase() } + " ${displayMonth.year}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Elegir mes y año",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.6f),
+                    modifier = Modifier.size(18.dp))
+            }
             IconButton(
                 onClick = { displayMonth = displayMonth.plusMonths(1) },
                 modifier = Modifier.size(32.dp)
@@ -536,6 +550,14 @@ private fun MonthlyCalendar(
                     modifier = Modifier.size(16.dp))
             }
         }
+    }
+
+    if (showMonthPicker) {
+        MonthYearPickerDialog(
+            current   = displayMonth,
+            onDismiss = { showMonthPicker = false },
+            onSelect  = { displayMonth = it; showMonthPicker = false }
+        )
     }
 }
 
