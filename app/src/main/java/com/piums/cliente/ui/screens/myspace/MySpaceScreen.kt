@@ -883,10 +883,10 @@ private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit 
                     }
                 }
                 Row {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Default.Edit, null,
                             tint = PiumsOrange.copy(0.7f),
-                            modifier = Modifier.size(16.dp))
+                            modifier = Modifier.size(20.dp))
                     }
                     // Agregar al calendario del dispositivo
                     event.eventDate?.let { dateStr ->
@@ -906,11 +906,11 @@ private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit 
                                 }
                                 runCatching { context.startActivity(intent) }
                             },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(44.dp)
                         ) {
                             Icon(Icons.Default.CalendarToday, null,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-                                modifier = Modifier.size(16.dp))
+                                modifier = Modifier.size(20.dp))
                         }
                     }
                     // Compartir evento
@@ -928,16 +928,16 @@ private fun EventCard(event: EventDto, onDelete: () -> Unit, onEdit: () -> Unit 
                             }
                             runCatching { context.startActivity(Intent.createChooser(intent, "Compartir evento")) }
                         },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(Icons.Default.Share, null,
                             tint = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-                            modifier = Modifier.size(16.dp))
+                            modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = { showDelete = true }, modifier = Modifier.size(36.dp)) {
+                    IconButton(onClick = { showDelete = true }, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Default.Delete, null,
                             tint = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-                            modifier = Modifier.size(18.dp))
+                            modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -1121,11 +1121,11 @@ private fun FavoriteCard(fav: FavoriteDto, artist: ArtistDto?, onClick: () -> Un
                 }
                 IconButton(
                     onClick  = onRemove,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(Icons.Default.Favorite, null,
                         tint     = Color(0xFFEF4444),
-                        modifier = Modifier.size(18.dp))
+                        modifier = Modifier.size(20.dp))
                 }
             }
         }

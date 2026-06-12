@@ -159,6 +159,8 @@ class BookingViewModel @Inject constructor(
         private set
     var notes by mutableStateOf("")
         private set
+    var dressCode by mutableStateOf("")
+        private set
     var pricingResult by mutableStateOf<PricingCalculateResponse?>(null)
         private set
     var computedDistanceKm by mutableStateOf<Double?>(null)
@@ -366,6 +368,7 @@ class BookingViewModel @Inject constructor(
     fun selectEvent(eventId: String?) { selectedEventId = eventId }
     fun toggleEventType(type: EventType) { selectedEventType = if (selectedEventType == type) null else type }
     fun onNotesChange(v: String) { notes = v }
+    fun onDressCodeChange(v: String) { dressCode = v.take(100) }
 
     fun createEvent(name: String, date: String?, location: String?, notes: String?, description: String? = null) {
         viewModelScope.launch {
@@ -440,6 +443,7 @@ class BookingViewModel @Inject constructor(
                     locationLat     = locationLat,
                     locationLng     = locationLng,
                     clientNotes     = notes.takeIf { it.isNotBlank() },
+                    dressCode       = dressCode.takeIf { it.isNotBlank() },
                     numDays         = numDays,
                     eventId         = selectedEventId,
                     couponCode      = couponCode.takeIf { isCouponApplied },
@@ -1038,6 +1042,21 @@ private fun DetailsStep(vm: BookingViewModel) {
             modifier      = Modifier.fillMaxWidth().height(100.dp),
             shape         = RoundedCornerShape(12.dp),
             maxLines      = 4,
+            colors        = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor   = PiumsOrange,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)
+            )
+        )
+
+        // Código de vestimenta
+        OutlinedTextField(
+            value         = vm.dressCode,
+            onValueChange = vm::onDressCodeChange,
+            label         = { Text("Código de vestimenta") },
+            placeholder   = { Text("Formal, casual, temática años 80...") },
+            modifier      = Modifier.fillMaxWidth(),
+            shape         = RoundedCornerShape(12.dp),
+            singleLine    = true,
             colors        = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor   = PiumsOrange,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(0.3f)

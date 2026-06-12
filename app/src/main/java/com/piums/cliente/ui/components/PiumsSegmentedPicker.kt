@@ -49,7 +49,7 @@ fun PiumsSegmentedPicker(
                     .clip(RoundedCornerShape(50.dp))
                     .background(if (selected) PiumsOrange else Color.Transparent)
                     .clickable { onTabSelected(idx) }
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                    .padding(vertical = 12.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -59,7 +59,7 @@ fun PiumsSegmentedPicker(
                     Icon(
                         imageVector = tab.icon,
                         contentDescription = tab.label,
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(18.dp),
                         tint = if (selected) Color.White
                                else MaterialTheme.colorScheme.onSurface.copy(0.6f)
                     )
@@ -67,7 +67,7 @@ fun PiumsSegmentedPicker(
                     if (selected) {
                         Text(
                             text = tab.label,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
                             maxLines = 1

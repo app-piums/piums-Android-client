@@ -164,6 +164,7 @@ data class CreateBookingRequest(
     val locationLat: Double?,
     val locationLng: Double?,
     val clientNotes: String?,
+    val dressCode: String? = null,
     val numDays: Int = 1,
     val eventId: String? = null,
     val couponCode: String? = null,

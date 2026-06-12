@@ -307,14 +307,32 @@ fun MainScaffold(
 
                 // Detail screens
                 composable(
-                    route = "artist/{artistId}",
-                    arguments = listOf(navArgument("artistId") { type = NavType.StringType })
+                    route = "artist/{artistId}?date={date}&lat={lat}&lng={lng}&location={location}",
+                    arguments = listOf(
+                        navArgument("artistId") { type = NavType.StringType },
+                        navArgument("date")     { type = NavType.StringType; defaultValue = ""; nullable = true },
+                        navArgument("lat")      { type = NavType.StringType; defaultValue = "0"; nullable = true },
+                        navArgument("lng")      { type = NavType.StringType; defaultValue = "0"; nullable = true },
+                        navArgument("location") { type = NavType.StringType; defaultValue = ""; nullable = true },
+                    )
                 ) { entry ->
                     val artistId = entry.arguments?.getString("artistId") ?: return@composable
+                    // Contexto opcional del flujo "buscar por fecha": se propaga a la reserva
+                    val presetDate = entry.arguments?.getString("date").orEmpty()
+                    val presetLat  = entry.arguments?.getString("lat") ?: "0"
+                    val presetLng  = entry.arguments?.getString("lng") ?: "0"
+                    val presetLoc  = entry.arguments?.getString("location").orEmpty()
                     ArtistProfileScreen(
                         artistId = artistId,
                         onBack   = { innerNav.popBackStack() },
-                        onBook   = { id -> innerNav.navigate("booking/$id") }
+                        onBook   = { id ->
+                            if (presetDate.isNotBlank() || presetLoc.isNotBlank()) {
+                                val locEnc = java.net.URLEncoder.encode(presetLoc, "UTF-8")
+                                innerNav.navigate("booking/$id?date=$presetDate&lat=$presetLat&lng=$presetLng&location=$locEnc")
+                            } else {
+                                innerNav.navigate("booking/$id")
+                            }
+                        }
                     )
                 }
                 composable(
@@ -405,7 +423,8 @@ fun MainScaffold(
                             val locEnc = java.net.URLEncoder.encode(locationLabel, "UTF-8")
                             val latStr = lat?.toString() ?: "0"
                             val lngStr = lng?.toString() ?: "0"
-                            innerNav.navigate("booking/$artistId?date=$date&lat=$latStr&lng=$lngStr&location=$locEnc")
+                            // Mostrar primero el perfil del artista; la reserva hereda fecha/ubicación
+                            innerNav.navigate("artist/$artistId?date=$date&lat=$latStr&lng=$lngStr&location=$locEnc")
                         },
                         initialDate      = dateStr.takeIf { it.isNotBlank() }?.let {
                             runCatching { LocalDate.parse(it) }.getOrNull()
