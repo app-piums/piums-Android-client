@@ -728,7 +728,8 @@ private fun TilopayWebSheet(
                         private fun interceptUrl(uri: Uri?): Boolean {
                             val host = uri?.host ?: return false
                             val path = uri.path  ?: return false
-                            if ((host.contains("piums") || host.contains("localhost")) &&
+                            val allowedHosts = setOf("client.piums.io", "backend.piums.io", "localhost", "10.0.2.2")
+                            if (host in allowedHosts &&
                                 path.contains("/booking/confirmation/")
                             ) {
                                 val params = uri.queryParameterNames.associateWith {
