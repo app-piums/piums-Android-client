@@ -28,7 +28,6 @@ import com.piums.cliente.ui.screens.inbox.InboxScreen
 import com.piums.cliente.ui.screens.myspace.MySpaceScreen
 import com.piums.cliente.ui.screens.onboarding.OnboardingScreen
 import com.piums.cliente.ui.screens.profile.ProfileScreen
-import com.piums.cliente.ui.screens.tutorial.TutorialScreen
 import com.piums.cliente.ui.screens.search.SearchScreen
 import com.piums.cliente.ui.screens.splash.SplashScreen
 import com.piums.cliente.ui.theme.PiumsError
@@ -44,7 +43,6 @@ sealed class Screen(val route: String) {
     object Biometric : Screen("biometric_gate")
     object Auth      : Screen("auth")
     object Onboarding: Screen("onboarding")
-    object Tutorial  : Screen("new_user_tutorial")
     object Main      : Screen("main")
 }
 
@@ -117,18 +115,8 @@ fun NavGraph() {
             composable(Screen.Onboarding.route) {
                 OnboardingScreen(
                     onDone = {
-                        navController.navigate(Screen.Tutorial.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
-                        }
-                    }
-                )
-            }
-
-            composable(Screen.Tutorial.route) {
-                TutorialScreen(
-                    onDone = {
                         navController.navigate(Screen.Splash.route) {
-                            popUpTo(Screen.Tutorial.route) { inclusive = true }
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
                         }
                     }
                 )

@@ -47,7 +47,6 @@ import com.piums.cliente.ui.screens.booking.ArtistSearchByDateScreen
 import com.piums.cliente.ui.screens.notifications.NotificationPreferencesScreen
 import com.piums.cliente.ui.screens.profile.IdentityVerificationScreen
 import com.piums.cliente.ui.screens.tutorial.HowItWorksScreen
-import com.piums.cliente.ui.screens.tutorial.TutorialScreen
 import com.piums.cliente.ui.screens.reviews.ReviewScreen
 import com.piums.cliente.ui.screens.disputes.CreateDisputeScreen
 import com.piums.cliente.ui.screens.disputes.MyDisputesScreen
@@ -432,15 +431,6 @@ fun MainScaffold(
                         initialLat       = lat.takeIf { it != 0.0 },
                         initialLng       = lng.takeIf { it != 0.0 },
                         initialLocation  = location
-                    )
-                }
-                composable("tutorial") {
-                    TutorialScreen(
-                        onDone = {
-                            tokenStorage?.tutorialDone = true
-                            innerNav.popBackStack()
-                        },
-                        tourManager = mainVm.tourManager
                     )
                 }
                 composable("identity-verification") {
