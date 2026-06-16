@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.piums.cliente.data.local.TokenStorage
 import com.piums.cliente.data.remote.PiumsApiService
 import com.piums.cliente.data.repository.AuthRepository
 import com.piums.cliente.ui.theme.PiumsOrange
@@ -46,7 +47,8 @@ import javax.inject.Inject
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val api: PiumsApiService
+    private val api: PiumsApiService,
+    private val tokenStorage: TokenStorage
 ) : ViewModel() {
 
     var selectedInterests     by mutableStateOf<Set<String>>(emptySet()); private set
@@ -104,6 +106,10 @@ class OnboardingViewModel @Inject constructor(
     fun complete(onDone: () -> Unit) {
         viewModelScope.launch {
             isLoading = true
+            runCatching {
+                val json = org.json.JSONArray(selectedInterests.toList()).toString()
+                tokenStorage.savedInterests = json
+            }
             runCatching { authRepository.completeOnboarding() }
             isLoading = false
             onDone()
@@ -120,14 +126,9 @@ private val INTERESTS = listOf(
     Interest("DJs & Electrónica",       Icons.Default.Headphones),
     Interest("Fotografía",              Icons.Default.CameraAlt),
     Interest("Video & Contenido",       Icons.Default.Videocam),
-    Interest("Diseño & Branding",       Icons.Default.Palette),
     Interest("Producción Musical",      Icons.Default.Piano),
     Interest("Danza & Performance",     Icons.Default.SelfImprovement),
-    Interest("Tatuaje & Body Art",      Icons.Default.Create),
     Interest("Magia & Entretenimiento", Icons.Default.AutoFixHigh),
-    Interest("Arte Visual",             Icons.Default.Brush),
-    Interest("Escritura & Letras",      Icons.Default.Edit),
-    Interest("Maquillaje & Estilismo",  Icons.Default.Face),
 )
 
 private val SUBCATEGORIES: Map<String, List<String>> = mapOf(
@@ -135,14 +136,9 @@ private val SUBCATEGORIES: Map<String, List<String>> = mapOf(
     "DJs & Electrónica"       to listOf("House & Tech","Reggaeton & Urban","Pop & Comercial","Hip-Hop & Trap","DJ para Bodas","Festival & Club"),
     "Fotografía"              to listOf("Eventos","Retratos","Editorial","Bodas","Producto","Urbana & Street"),
     "Video & Contenido"       to listOf("Clips Musicales","Bodas & Celebraciones","Redes Sociales","Documental","Comercial","Cortometraje"),
-    "Diseño & Branding"       to listOf("Logo & Identidad","Flyers & Carteles","Portadas de Álbum","Redes Sociales","Merch & Textil","Cartelería de Evento"),
     "Producción Musical"      to listOf("Beat Making","Mezcla & Mastering","Grabación en Estudio","Composición","Arreglos","Jingle & Publicidad"),
     "Danza & Performance"     to listOf("Urbano & Hip-Hop","Ballet Clásico","Contemporáneo","Latino & Salsa","Folklore","Show & Entretenimiento"),
-    "Tatuaje & Body Art"      to listOf("Realismo","Geométrico","Minimalista","Neo-Tradicional","Line Art","Color & Acuarela"),
     "Magia & Entretenimiento" to listOf("Magia de Cerca","Gran Ilusionismo","Malabares","Acrobacia","Circo","Fuego & Pirotecnia"),
-    "Arte Visual"             to listOf("Pintura al Óleo","Acuarela","Ilustración Digital","Mural","Escultura","Arte Urbano"),
-    "Escritura & Letras"      to listOf("Letras de Canción","Guiones","Copywriting","Poesía","Contenidos Web","Libros & Narrativa"),
-    "Maquillaje & Estilismo"  to listOf("Maquillaje de Bodas","Cine & Teatro","Efectos Especiales FX","Pasarela & Moda","Caracterización","Nail Art"),
 )
 
 // ─── Screen ───────────────────────────────────────────────────────────────────

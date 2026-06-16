@@ -75,6 +75,9 @@ class HomeViewModel @Inject constructor(
     var recommendedArtists by mutableStateOf<List<ArtistDto>>(emptyList())
         private set
 
+    var personalizedSections by mutableStateOf<Map<String, List<ArtistDto>>>(emptyMap())
+        private set
+
     var isLoading by mutableStateOf(true)
         private set
 
@@ -120,6 +123,20 @@ class HomeViewModel @Inject constructor(
                     .minByOrNull { it.scheduledDate ?: "" }
 
                 recommendedArtists = (artistsDeferred.await()?.list ?: emptyList()).filter { it.servicesCount > 0 || it.serviceIds?.isNotEmpty() == true || it.serviceTitles?.isNotEmpty() == true }
+
+                // Load personalized sections based on saved interests
+                val categories = resolvePersonalizedCategories(tokenStorage.savedInterests)
+                if (categories.isNotEmpty()) {
+                    val sections = mutableMapOf<String, List<ArtistDto>>()
+                    for (cat in categories) {
+                        runCatching { api.searchArtists(page = 1, limit = 8, specialty = cat) }
+                            .getOrNull()?.list
+                            ?.filter { it.servicesCount > 0 || it.serviceIds?.isNotEmpty() == true || it.serviceTitles?.isNotEmpty() == true }
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { sections[cat] = it }
+                    }
+                    personalizedSections = sections
+                }
             } catch (e: Exception) {
                 Log.e("PiumsAPI", "HomeViewModel refresh processing error", e)
                 error = "No se pudo cargar la información"
@@ -132,6 +149,35 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+}
+
+// ─── Personalization helpers ──────────────────────────────────────────────────
+
+private val INTEREST_TO_CATEGORY = mapOf(
+    "Música en Vivo"          to "MUSICO",
+    "DJs & Electrónica"       to "MUSICO",
+    "Fotografía"              to "FOTOGRAFO",
+    "Video & Contenido"       to "VIDEOGRAFO",
+    "Producción Musical"      to "MUSICO",
+    "Danza & Performance"     to "ANIMADOR",
+    "Magia & Entretenimiento" to "ANIMADOR",
+)
+
+private val CATEGORY_LABELS = mapOf(
+    "MUSICO"     to "Músicos para ti",
+    "FOTOGRAFO"  to "Fotógrafos para ti",
+    "VIDEOGRAFO" to "Videógrafos para ti",
+    "ANIMADOR"   to "Animadores para ti",
+)
+
+private fun resolvePersonalizedCategories(json: String): List<String> {
+    if (json.isBlank()) return emptyList()
+    return runCatching {
+        val arr = org.json.JSONArray(json)
+        (0 until arr.length())
+            .mapNotNull { INTEREST_TO_CATEGORY[arr.getString(it)] }
+            .distinct()
+    }.getOrDefault(emptyList())
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -243,6 +289,41 @@ fun HomeScreen(
             ) {
                 items(vm.recommendedArtists) { artist ->
                     ArtistCard(artist = artist, onClick = { onArtistClick(artist.resolvedId) })
+                }
+            }
+        }
+
+        // Personalized sections
+        if (vm.personalizedSections.isNotEmpty()) {
+            vm.personalizedSections.forEach { (cat, artists) ->
+                val sectionTitle = CATEGORY_LABELS[cat] ?: cat
+                Spacer(Modifier.height(28.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        sectionTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    TextButton(onClick = onSearchClick) {
+                        Text("Ver todos", color = PiumsOrange,
+                            style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(artists) { artist ->
+                        ArtistCard(artist = artist, onClick = { onArtistClick(artist.resolvedId) })
+                    }
                 }
             }
         }

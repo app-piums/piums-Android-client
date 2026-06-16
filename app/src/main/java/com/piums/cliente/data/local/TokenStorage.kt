@@ -85,6 +85,10 @@ class TokenStorage @Inject constructor(
         get()      = plain.getBoolean(KEY_SELFIE_DONE, false)
         set(value) = plain.edit().putBoolean(KEY_SELFIE_DONE, value).apply()
 
+    var savedInterests: String
+        get()      = plain.getString(KEY_SAVED_INTERESTS, "") ?: ""
+        set(value) = plain.edit().putString(KEY_SAVED_INTERESTS, value).apply()
+
     val isLoggedIn: Boolean get() = accessToken != null
 
     fun clear() {
@@ -92,11 +96,13 @@ class TokenStorage @Inject constructor(
         val savedOnboarding = onboardingDone
         val savedTutorial   = tutorialDone
         val savedTheme      = darkModeOverride
+        val savedInt        = savedInterests
         secure.edit().clear().apply()
         plain.edit().clear().apply()
         onboardingDone   = savedOnboarding
         tutorialDone     = savedTutorial
         darkModeOverride = savedTheme
+        savedInterests   = savedInt
     }
 
     companion object {
@@ -115,5 +121,6 @@ class TokenStorage @Inject constructor(
         private const val KEY_DPI_FRONT_DONE    = "dpi_front_done"
         private const val KEY_DPI_BACK_DONE     = "dpi_back_done"
         private const val KEY_SELFIE_DONE       = "selfie_done"
+        private const val KEY_SAVED_INTERESTS   = "saved_interests"
     }
 }
