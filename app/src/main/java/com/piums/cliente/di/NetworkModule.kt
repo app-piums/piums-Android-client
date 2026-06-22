@@ -54,7 +54,7 @@ private object FlexibleIntAdapterFactory : TypeAdapterFactory {
 // puede alternar entre Let's Encrypt y Google Trust Services, por eso se
 // incluyen pins de respaldo a nivel raíz de ambas CAs.
 private val CERTIFICATE_PINNER = CertificatePinner.Builder()
-    .add("client.piums.io", "sha256/ER8v0GmGJasfGMzQ5zfDC86y7MQaWq1o+JgQ8Ob2z6c=") // leaf piums.io (vence 2026-07-21)
+    .add("client.piums.io", "sha256/tv7cc1Iwz1sj3HLZxJ+yshMyoch44e3/OWZqG6AjPdI=") // leaf piums.io (vence 2026-09-18)
     .add("client.piums.io", "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=") // Let's Encrypt E8 (intermediate)
     .add("client.piums.io", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=") // ISRG Root X1 (backup)
     .add("client.piums.io", "sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=") // GTS Root R1 (backup Cloudflare)

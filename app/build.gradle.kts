@@ -40,6 +40,7 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "BASE_URL", "\"https://client.piums.io/\"")
+            buildConfigField("String", "BACKEND_URL", "\"https://backend.piums.io\"")
         }
         release {
             isMinifyEnabled = true
@@ -49,6 +50,7 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("String", "BASE_URL", "\"https://client.piums.io/\"")
+            buildConfigField("String", "BACKEND_URL", "\"https://backend.piums.io\"")
         }
     }
 

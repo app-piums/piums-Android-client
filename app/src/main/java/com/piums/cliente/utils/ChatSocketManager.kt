@@ -1,6 +1,7 @@
 package com.piums.cliente.utils
 
 import android.util.Log
+import com.piums.cliente.BuildConfig
 import com.piums.cliente.data.local.TokenStorage
 import com.piums.cliente.data.remote.dto.ChatMessageDto
 import dagger.hilt.android.scopes.ActivityRetainedScoped
@@ -60,7 +61,7 @@ class ChatSocketManager @Inject constructor(
         }
 
         runCatching {
-            val s = IO.socket(SOCKET_URL, options)
+            val s = IO.socket(BuildConfig.BACKEND_URL, options)
             socket = s
 
             s.on(Socket.EVENT_CONNECT) {
@@ -144,7 +145,5 @@ class ChatSocketManager @Inject constructor(
         )
     }
 
-    companion object {
-        private const val SOCKET_URL = "https://backend.piums.io"
-    }
+    companion object
 }

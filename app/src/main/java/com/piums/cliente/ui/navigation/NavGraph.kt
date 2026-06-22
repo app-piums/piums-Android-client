@@ -62,7 +62,7 @@ fun NavGraph() {
     val navVm: NavViewModel = hiltViewModel()
     val isOnline by navVm.isOnline.collectAsState(initial = true)
 
-    val startDest = if (!navVm.tokenStorage.onboardingDone) Screen.Onboarding.route else Screen.Splash.route
+    val startDest = Screen.Splash.route
 
     Box(Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = startDest) {
@@ -105,7 +105,8 @@ fun NavGraph() {
             composable(Screen.Auth.route) {
                 AuthScreen(
                     onSuccess = {
-                        navController.navigate(Screen.Main.route) {
+                        val dest = if (!navVm.tokenStorage.onboardingDone) Screen.Onboarding.route else Screen.Main.route
+                        navController.navigate(dest) {
                             popUpTo(Screen.Auth.route) { inclusive = true }
                         }
                     }
