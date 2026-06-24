@@ -176,6 +176,20 @@ data class RescheduleRequest(
     val reason: String?
 )
 
+data class SonidistaMatch(
+    val serviceId: String,
+    val artistId: String,
+    val artistName: String,
+    val artistRating: Double,
+    val price: Double,
+    val city: String?,
+    val avatar: String?
+)
+
+data class SonidistaCheckResponse(
+    val matches: List<SonidistaMatch>
+)
+
 data class ReplacementSearchDto(
     val status: String,
     val expiresAt: String?,

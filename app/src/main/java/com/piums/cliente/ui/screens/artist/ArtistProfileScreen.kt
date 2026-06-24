@@ -524,6 +524,22 @@ private fun ProfileHeader(
                 }
             }
 
+            // No-sound-system badge
+            if (artist.hasSoundSystem == false) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.VolumeOff, contentDescription = null,
+                        tint = Color(0xFFE65100), modifier = Modifier.size(14.dp))
+                    Text(
+                        "Sin equipo de sonido propio",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFE65100)
+                    )
+                }
+            }
+
             // Location & specialties
             if (!artist.city.isNullOrBlank()) {
                 Row(

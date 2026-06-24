@@ -313,6 +313,15 @@ interface PiumsApiService {
     @POST("api/bookings/{id}/replacement/decline")
     suspend fun declineReplacement(@Path("id") id: String): retrofit2.Response<Unit>
 
+    // ── Sonidista check ───────────────────────────────────────────────────────
+    @GET("api/bookings/sonidista-check")
+    suspend fun getSonidistaCheck(
+        @Query("city") city: String,
+        @Query("date") date: String,
+        @Query("durationMinutes") durationMinutes: Int,
+        @Query("excludeArtistId") excludeArtistId: String? = null
+    ): SonidistaCheckResponse
+
     // ── Google Calendar ───────────────────────────────────────────────────────
     @GET("api/auth/google-calendar/status")
     suspend fun googleCalendarStatus(): GoogleCalendarStatusResponse

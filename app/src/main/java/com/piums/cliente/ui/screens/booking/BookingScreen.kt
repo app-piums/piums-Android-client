@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -185,6 +187,14 @@ class BookingViewModel @Inject constructor(
     var bookingError by mutableStateOf<String?>(null)
         private set
 
+    // Sonidista offer
+    var sonidistaMatches by mutableStateOf<List<SonidistaMatch>>(emptyList())
+        private set
+    var sonidistaLoading by mutableStateOf(false)
+        private set
+    var sonidistaDismissed by mutableStateOf(false)
+        private set
+
     // Derived price helpers
     val rawTotal: Int? get() = pricingResult?.totalAmount
         ?: selectedService?.basePrice?.let { it * numDays }
@@ -250,7 +260,34 @@ class BookingViewModel @Inject constructor(
 
     fun selectService(svc: ArtistServiceDto) { selectedService = svc }
 
-    fun nextStep() { if (step < 3) step++ }
+    fun dismissSonidista() { sonidistaDismissed = true }
+
+    private fun loadSonidistaCheck() {
+        val a = artist ?: return
+        if (a.hasSoundSystem != false) return
+        val city = a.city?.takeIf { it.isNotBlank() } ?: return
+        val date = selectedDate?.toString() ?: return
+        val dur  = selectedService?.duration ?: 60
+        viewModelScope.launch {
+            sonidistaLoading = true
+            runCatching {
+                api.getSonidistaCheck(
+                    city            = city,
+                    date            = "${date}T12:00:00.000Z",
+                    durationMinutes = dur,
+                    excludeArtistId = artistId
+                ).matches
+            }.onSuccess { sonidistaMatches = it }
+            sonidistaLoading = false
+        }
+    }
+
+    fun nextStep() {
+        if (step < 3) {
+            step++
+            if (step == 3) loadSonidistaCheck()
+        }
+    }
     fun prevStep() { if (step > 0) step-- }
 
     fun changeMonth(delta: Int) {
@@ -1190,6 +1227,83 @@ private fun EventTypePickerSection(
 }
 
 @Composable
+private fun SonidistaOfferCard(
+    matches: List<SonidistaMatch>,
+    loading: Boolean,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF1565C0).copy(0.07f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+            Icon(Icons.Default.VolumeOff, contentDescription = null,
+                tint = Color(0xFF1565C0), modifier = Modifier.size(18.dp).padding(top = 2.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Este artista no tiene equipo de sonido propio",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1565C0)
+                )
+                Text(
+                    "Puedes contratar a un sonidista para complementar tu reserva.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
+                )
+            }
+        }
+
+        if (loading) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF1565C0))
+            }
+        } else if (matches.isEmpty) {
+            Text(
+                "No encontramos sonidistas disponibles para este dia.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.5f)
+            )
+        } else {
+            matches.take(3).forEach { match ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AsyncImage(
+                        model = match.avatar,
+                        contentDescription = null,
+                        modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF1565C0).copy(0.15f)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(match.artistName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("$${String.format("%,.2f", match.price / 100.0)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
+                        Text(String.format("%.1f", match.artistRating), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
+        TextButton(
+            onClick  = onDismiss,
+            modifier = Modifier.align(Alignment.End),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text("No, gracias", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+        }
+    }
+}
+
+@Composable
 private fun CouponField(vm: BookingViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
@@ -1580,6 +1694,15 @@ private fun ConfirmStep(vm: BookingViewModel) {
                 color = Color(0xFF795800).copy(0.8f),
                 lineHeight = 16.sp,
                 modifier = Modifier.padding(start = 24.dp)
+            )
+        }
+
+        // ── Sonidista offer ──
+        if (vm.artist?.hasSoundSystem == false && !vm.sonidistaDismissed) {
+            SonidistaOfferCard(
+                matches  = vm.sonidistaMatches,
+                loading  = vm.sonidistaLoading,
+                onDismiss = { vm.dismissSonidista() }
             )
         }
 

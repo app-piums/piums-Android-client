@@ -57,7 +57,8 @@ data class ArtistDto(
     val coverUrl: String? = null,
     val instagram: String? = null,
     val website: String? = null,
-    val certifications: List<CertificationDto>? = null
+    val certifications: List<CertificationDto>? = null,
+    val hasSoundSystem: Boolean? = null
 ) {
     val resolvedId: String get() = id.orEmpty()
     val displayName: String get() = name?.takeIf { it.isNotBlank() }
