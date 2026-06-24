@@ -194,6 +194,11 @@ class BookingViewModel @Inject constructor(
         private set
     var sonidistaDismissed by mutableStateOf(false)
         private set
+    var selectedSonidista by mutableStateOf<SonidistaMatch?>(null)
+        private set
+
+    fun selectSonidista(match: SonidistaMatch) { selectedSonidista = match }
+    fun deselectSonidista() { selectedSonidista = null }
 
     // Derived price helpers
     val rawTotal: Int? get() = pricingResult?.totalAmount
@@ -260,7 +265,7 @@ class BookingViewModel @Inject constructor(
 
     fun selectService(svc: ArtistServiceDto) { selectedService = svc }
 
-    fun dismissSonidista() { sonidistaDismissed = true }
+    fun dismissSonidista() { sonidistaDismissed = true; selectedSonidista = null }
 
     private fun loadSonidistaCheck() {
         val a = artist ?: return
@@ -471,20 +476,21 @@ class BookingViewModel @Inject constructor(
             val isoDateTime = buildIsoDateTime(date, selectedTime)
             val result = runCatching {
                 api.createBooking(CreateBookingRequest(
-                    artistId        = artistId,
-                    serviceId       = svc.id,
-                    clientId        = tokenStorage.userId ?: "",
-                    scheduledDate   = isoDateTime,
-                    durationMinutes = svc.duration,
-                    location        = location.takeIf { it.isNotBlank() },
-                    locationLat     = locationLat,
-                    locationLng     = locationLng,
-                    clientNotes     = notes.takeIf { it.isNotBlank() },
-                    dressCode       = dressCode.takeIf { it.isNotBlank() },
-                    numDays         = numDays,
-                    eventId         = selectedEventId,
-                    couponCode      = couponCode.takeIf { isCouponApplied },
-                    eventType       = selectedEventType?.apiValue
+                    artistId            = artistId,
+                    serviceId           = svc.id,
+                    clientId            = tokenStorage.userId ?: "",
+                    scheduledDate       = isoDateTime,
+                    durationMinutes     = svc.duration,
+                    location            = location.takeIf { it.isNotBlank() },
+                    locationLat         = locationLat,
+                    locationLng         = locationLng,
+                    clientNotes         = notes.takeIf { it.isNotBlank() },
+                    dressCode           = dressCode.takeIf { it.isNotBlank() },
+                    numDays             = numDays,
+                    eventId             = selectedEventId,
+                    couponCode          = couponCode.takeIf { isCouponApplied },
+                    eventType           = selectedEventType?.apiValue,
+                    sonidistaServiceId  = selectedSonidista?.serviceId
                 ))
             }
             result.onSuccess { bookingResult = it }
@@ -1230,6 +1236,9 @@ private fun EventTypePickerSection(
 private fun SonidistaOfferCard(
     matches: List<SonidistaMatch>,
     loading: Boolean,
+    selectedSonidista: SonidistaMatch?,
+    onSelect: (SonidistaMatch) -> Unit,
+    onDeselect: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -1258,47 +1267,92 @@ private fun SonidistaOfferCard(
             }
         }
 
-        if (loading) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF1565C0))
+        if (selectedSonidista != null) {
+            // Estado: sonidista seleccionado
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF1B5E20).copy(0.08f))
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = selectedSonidista.avatar,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF4CAF50).copy(0.15f)),
+                    contentScale = ContentScale.Crop
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(selectedSonidista.artistName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("Q${String.format("%.0f", selectedSonidista.price)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                }
+                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+                TextButton(onClick = onDeselect, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                    Text("Cambiar", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1565C0))
+                }
             }
-        } else if (matches.isEmpty) {
             Text(
-                "No encontramos sonidistas disponibles para este dia.",
+                "El pago al sonidista se coordina por separado cuando confirme.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(0.5f)
             )
         } else {
-            matches.take(3).forEach { match ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AsyncImage(
-                        model = match.avatar,
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF1565C0).copy(0.15f)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(match.artistName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text("$${String.format("%,.2f", match.price / 100.0)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
-                        Text(String.format("%.1f", match.artistRating), style = MaterialTheme.typography.labelSmall)
+            // Estado: lista de candidatos
+            if (loading) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF1565C0))
+                }
+            } else if (matches.isEmpty) {
+                Text(
+                    "No encontramos sonidistas disponibles para este dia.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f)
+                )
+            } else {
+                matches.take(3).forEach { match ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AsyncImage(
+                            model = match.avatar,
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF1565C0).copy(0.15f)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(match.artistName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text("Q${String.format("%.0f", match.price)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
+                                Text(String.format("%.1f", match.artistRating), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        TextButton(
+                            onClick = { onSelect(match) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                containerColor = Color(0xFF1565C0),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Text("Agregar", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
-        }
 
-        TextButton(
-            onClick  = onDismiss,
-            modifier = Modifier.align(Alignment.End),
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            Text("No, gracias", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+            TextButton(
+                onClick  = onDismiss,
+                modifier = Modifier.align(Alignment.End),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text("No, gracias", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+            }
         }
     }
 }
@@ -1700,9 +1754,12 @@ private fun ConfirmStep(vm: BookingViewModel) {
         // ── Sonidista offer ──
         if (vm.artist?.hasSoundSystem == false && !vm.sonidistaDismissed) {
             SonidistaOfferCard(
-                matches  = vm.sonidistaMatches,
-                loading  = vm.sonidistaLoading,
-                onDismiss = { vm.dismissSonidista() }
+                matches           = vm.sonidistaMatches,
+                loading           = vm.sonidistaLoading,
+                selectedSonidista = vm.selectedSonidista,
+                onSelect          = { vm.selectSonidista(it) },
+                onDeselect        = { vm.deselectSonidista() },
+                onDismiss         = { vm.dismissSonidista() }
             )
         }
 

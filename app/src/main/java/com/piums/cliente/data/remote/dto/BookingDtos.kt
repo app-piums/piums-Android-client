@@ -168,7 +168,8 @@ data class CreateBookingRequest(
     val numDays: Int = 1,
     val eventId: String? = null,
     val couponCode: String? = null,
-    val eventType: String? = null
+    val eventType: String? = null,
+    val sonidistaServiceId: String? = null
 )
 
 data class RescheduleRequest(
