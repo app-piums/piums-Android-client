@@ -35,6 +35,7 @@ class DeepLinkManager @Inject constructor() {
             "RESCHEDULE_APPROVED",
             "RESCHEDULE_REJECTED",
             "SONIDISTA_PAYMENT_REQUIRED",
+            "PAYMENT_MANUAL_REQUIRED",
             "SONIDISTA_REJECTED"               -> if (entityId != null) DeepLinkTarget.Booking(entityId)
                                                   else DeepLinkTarget.Notifications
             "NEW_REVIEW", "ARTIST_PROFILE"     -> if (entityId != null) DeepLinkTarget.Artist(entityId)
