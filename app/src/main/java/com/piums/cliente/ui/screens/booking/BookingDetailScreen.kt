@@ -648,6 +648,67 @@ fun BookingDetailScreen(
                     // Acciones
                     DetailCard(title = "Acciones") {
                         Column {
+                            // Sonidista addon payment section
+                            val snd = booking.sonidistaBooking
+                            if (snd != null) {
+                                when {
+                                    snd.status == "CONFIRMED" && snd.paymentStatus == "PENDING" -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(PiumsOrange)
+                                                .clickable { onPay(snd.id) }
+                                                .padding(16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment     = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.CreditCard, null,
+                                                    tint     = Color.White,
+                                                    modifier = Modifier.size(18.dp))
+                                                Text("Pagar sonidista ($${String.format("%,.2f", snd.totalPrice / 100.0)})",
+                                                    color      = Color.White,
+                                                    fontWeight = FontWeight.Bold,
+                                                    style      = MaterialTheme.typography.bodyLarge)
+                                            }
+                                        }
+                                    }
+                                    snd.status == "CONFIRMED" && snd.paymentStatus == "CARD_AUTHORIZED" -> {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
+                                            Text("Sonidista — pago reservado", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                    snd.status == "PENDING" -> {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Schedule, null, tint = Color(0xFFFF9800), modifier = Modifier.size(18.dp))
+                                            Text("Sonidista — esperando respuesta", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                    snd.status == "REJECTED" -> {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Cancel, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                            Text("Sonidista no disponible", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.08f))
+                            }
+
                             // Pay now (highlighted)
                             if (booking.canPay) {
                                 Box(

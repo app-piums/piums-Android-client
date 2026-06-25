@@ -93,7 +93,10 @@ data class BookingDto(
     val discountAmount: Int? = null,
     val attendanceCode: String? = null,
     @SerializedName("requiresProductDelivery") val requiresProductDelivery: Boolean? = null,
-    val productDeliveryUrl: String? = null
+    val productDeliveryUrl: String? = null,
+    val bookingRole: String? = null,
+    val linkedBookingId: String? = null,
+    val sonidistaBooking: SonidistaBookingInfo? = null,
 ) {
     // artistName (campo raíz) tiene prioridad sobre el nombre anidado en user.nombre
     // que puede ser un ID autogenerado del sistema
@@ -175,6 +178,13 @@ data class CreateBookingRequest(
 data class RescheduleRequest(
     val scheduledDate: String,
     val reason: String?
+)
+
+data class SonidistaBookingInfo(
+    val id: String,
+    val status: String,
+    val paymentStatus: String?,
+    val totalPrice: Int,
 )
 
 data class SonidistaMatch(
