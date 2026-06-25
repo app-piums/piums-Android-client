@@ -1286,7 +1286,7 @@ private fun SonidistaOfferCard(
                 )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(selectedSonidista.artistName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("Q${String.format("%.0f", selectedSonidista.price)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                    Text("$${String.format("%,.2f", selectedSonidista.price / 100.0)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
                 }
                 Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
                 TextButton(onClick = onDeselect, contentPadding = PaddingValues(horizontal = 4.dp)) {
@@ -1325,7 +1325,7 @@ private fun SonidistaOfferCard(
                         )
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(match.artistName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text("Q${String.format("%.0f", match.price)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                            Text("$${String.format("%,.2f", match.price / 100.0)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Star, null, tint = Color(0xFFFFC107), modifier = Modifier.size(12.dp))
                                 Text(String.format("%.1f", match.artistRating), style = MaterialTheme.typography.labelSmall)
